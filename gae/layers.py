@@ -1,4 +1,4 @@
-from gae.initializations import *
+from initializations import *
 import tensorflow as tf
 
 flags = tf.app.flags
@@ -24,9 +24,9 @@ def dropout_sparse(x, keep_prob, num_nonzero_elems):
     """
     noise_shape = [num_nonzero_elems]
     random_tensor = keep_prob
-    random_tensor += tf.random_uniform(noise_shape)
+    random_tensor += tf.random.uniform(noise_shape)
     dropout_mask = tf.cast(tf.floor(random_tensor), dtype=tf.bool)
-    pre_out = tf.sparse_retain(x, dropout_mask)
+    pre_out = tf.sparse.retain(x, dropout_mask)
     return pre_out * (1./keep_prob)
 
 
@@ -68,7 +68,7 @@ class GraphConvolution(Layer):
     """Basic graph convolution layer for undirected graph without edge labels."""
     def __init__(self, input_dim, output_dim, adj, dropout=0., act=tf.nn.relu, **kwargs):
         super(GraphConvolution, self).__init__(**kwargs)
-        with tf.variable_scope(self.name + '_vars'):
+        with tf.compat.v1.variable_scope(self.name + '_vars'):
             self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name="weights")
         self.dropout = dropout
         self.adj = adj
@@ -76,9 +76,9 @@ class GraphConvolution(Layer):
 
     def _call(self, inputs):
         x = inputs
-        x = tf.nn.dropout(x, 1-self.dropout)
+        x = tf.nn.dropout(x, rate = self.dropout)
         x = tf.matmul(x, self.vars['weights'])
-        x = tf.sparse_tensor_dense_matmul(self.adj, x)
+        x = tf.sparse.sparse_dense_matmul(self.adj, x)
         outputs = self.act(x)
         return outputs
 
@@ -87,7 +87,7 @@ class GraphConvolutionSparse(Layer):
     """Graph convolution layer for sparse inputs."""
     def __init__(self, input_dim, output_dim, adj, features_nonzero, dropout=0., act=tf.nn.relu, **kwargs):
         super(GraphConvolutionSparse, self).__init__(**kwargs)
-        with tf.variable_scope(self.name + '_vars'):
+        with tf.compat.v1.variable_scope(self.name + '_vars'):
             self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name="weights")
         self.dropout = dropout
         self.adj = adj
@@ -98,8 +98,8 @@ class GraphConvolutionSparse(Layer):
     def _call(self, inputs):
         x = inputs
         x = dropout_sparse(x, 1-self.dropout, self.features_nonzero)
-        x = tf.sparse_tensor_dense_matmul(x, self.vars['weights'])
-        x = tf.sparse_tensor_dense_matmul(self.adj, x)
+        x = tf.sparse.sparse_dense_matmul(x, self.vars['weights'])
+        x = tf.sparse.sparse_dense_matmul(self.adj, x)
         outputs = self.act(x)
         return outputs
 
@@ -112,7 +112,7 @@ class InnerProductDecoder(Layer):
         self.act = act
 
     def _call(self, inputs):
-        inputs = tf.nn.dropout(inputs, 1-self.dropout)
+        inputs = tf.nn.dropout(inputs, rate = self.dropout)
         x = tf.transpose(inputs)
         x = tf.matmul(inputs, x)
         x = tf.reshape(x, [-1])
