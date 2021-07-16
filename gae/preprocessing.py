@@ -29,8 +29,8 @@ def construct_feed_dict(adj_normalized, adj, features, placeholders):
     return feed_dict
 
 
-def mask_test_edges(adj):
-    # Function to build test set with 10% positive links
+def mask_test_edges(adj,num_val=None, num_test=None):
+    # Function to build test set with num_test positive links
     # NOTE: Splits are randomized and results might slightly deviate from reported numbers in the paper.
     # TODO: Clean up.
 
@@ -44,8 +44,11 @@ def mask_test_edges(adj):
     adj_tuple = sparse_to_tuple(adj_triu)
     edges = adj_tuple[0]
     edges_all = sparse_to_tuple(adj)[0]
-    num_test = int(np.floor(edges.shape[0] / 10.))
-    num_val = int(np.floor(edges.shape[0] / 20.))
+
+    if num_test is None:
+        num_test = int(np.floor(edges.shape[0] * 0.1)) #10% of edges for test set
+    if num_val is None:
+        num_val = int(np.floor(edges.shape[0] * 0.05)) #5% of edges for validation set
 
     all_edge_idx = list(range(edges.shape[0]))
     np.random.shuffle(all_edge_idx)
@@ -56,6 +59,8 @@ def mask_test_edges(adj):
     train_edges = np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]), axis=0)
 
     def ismember(a, b, tol=5):
+        if (type(a)==list and not a) or not b.any():
+            return False
         rows_close = np.all(np.round(a - b[:, None], tol) == 0, axis=-1)
         return np.any(rows_close)
 
@@ -80,13 +85,11 @@ def mask_test_edges(adj):
         idx_j = np.random.randint(0, adj.shape[0])
         if idx_i == idx_j:
             continue
-        if ismember([idx_i, idx_j], train_edges):
+        if ismember([idx_i, idx_j], edges_all):
             continue
-        if ismember([idx_j, idx_i], train_edges):
+        if ismember([idx_j, idx_i], np.array(test_edges_false)):
             continue
-        if ismember([idx_i, idx_j], val_edges):
-            continue
-        if ismember([idx_j, idx_i], val_edges):
+        if ismember([idx_i, idx_j], np.array(test_edges_false)):
             continue
         if val_edges_false:
             if ismember([idx_j, idx_i], np.array(val_edges_false)):
@@ -95,8 +98,35 @@ def mask_test_edges(adj):
                 continue
         val_edges_false.append([idx_i, idx_j])
 
+    train_edges_false = []
+    while len(train_edges_false) < len(train_edges):
+        idx_i = np.random.randint(0, adj.shape[0])
+        idx_j = np.random.randint(0, adj.shape[0])
+        if idx_i == idx_j:
+            continue
+        if ismember([idx_i, idx_j], edges_all):
+            continue
+        if ismember([idx_j, idx_i], np.array(test_edges_false)):
+            continue
+        if ismember([idx_i, idx_j], np.array(test_edges_false)):
+            continue
+        if ismember([idx_j, idx_i], np.array(val_edges_false)):
+            continue
+        if ismember([idx_i, idx_j], np.array(val_edges_false)):
+            continue
+        if train_edges_false:
+            if ismember([idx_j, idx_i], np.array(train_edges_false)):
+                continue
+            if ismember([idx_i, idx_j], np.array(train_edges_false)):
+                continue
+        train_edges_false.append([idx_i, idx_j])
+
     assert ~ismember(test_edges_false, edges_all)
     assert ~ismember(val_edges_false, edges_all)
+    assert ~ismember(train_edges_false, edges_all)
+    assert ~ismember(val_edges_false, np.array(train_edges_false))
+    assert ~ismember(test_edges_false, np.array(train_edges_false))
+    assert ~ismember(val_edges_false, np.array(test_edges_false))
     assert ~ismember(val_edges, train_edges)
     assert ~ismember(test_edges, train_edges)
     assert ~ismember(val_edges, test_edges)
@@ -108,4 +138,48 @@ def mask_test_edges(adj):
     adj_train = adj_train + adj_train.T
 
     # NOTE: these edge lists only contain single direction of edge!
-    return adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false
+    return adj_train, train_edges, np.array(train_edges_false), val_edges, np.array(val_edges_false), test_edges, np.array(test_edges_false)
+
+def gen_crossval_edges(adj):
+    adj_train, train_edges, train_edges_false, val_edges, val_edges_false = ([] for i in range(5))
+    num_edges = int((adj.todense().sum()-np.diag(adj.todense()).sum())/2)
+    num_test = int(np.floor(num_edges * 0.1)) #10% of edges for test set
+    num_val = int(np.floor(num_edges * 0.05)) #5% of edges for validation set
+    
+    _, _, _, val_train_edges, val_train_edges_false, test_edges, test_edges_false = mask_test_edges(adj, num_val=num_edges-num_test, num_test=num_test)
+    crossval_edges = [train_edges, train_edges_false, val_edges, val_edges_false]
+    all_edge_idx = list(range(val_train_edges.shape[0]))
+
+    #positive samples
+    np.random.shuffle(all_edge_idx)
+    for i in range(int((num_edges-num_test)/num_val)):
+        val_edges_idx = all_edge_idx[i*num_val:(i+1)*num_val]
+        val_edges_cv = val_train_edges[val_edges_idx]
+        train_edges_cv = np.delete(val_train_edges, val_edges_idx, axis=0)
+        data = np.ones(train_edges_cv.shape[0])
+        adj_train_cv = sp.csr_matrix((data, (train_edges_cv[:, 0], train_edges_cv[:, 1])), shape=adj.shape)
+        adj_train_cv = adj_train_cv + adj_train_cv.T
+        
+        adj_train.append(adj_train_cv)
+        train_edges.append(train_edges_cv)
+        val_edges.append(val_edges_cv)
+        
+    #negative samples
+    np.random.shuffle(all_edge_idx)
+    for i in range(int((num_edges-num_test)/num_val)):
+        val_edges_false_idx = all_edge_idx[i*num_val:(i+1)*num_val]
+        val_edges_false_cv = val_train_edges_false[val_edges_false_idx]
+        train_edges_false_cv = np.delete(val_train_edges_false, val_edges_false_idx, axis=0)
+
+        train_edges_false.append(train_edges_false_cv)
+        val_edges_false.append(val_edges_false_cv)
+
+    print("\n++++++++++++++++++++++++++++++++++++++++++++++++++++")   
+    print("# edges in original graph: " + str(num_edges))
+    print("# edges used for training: " + str(train_edges[0].shape[0]))
+    print("# edges used for validation: " + str(val_edges[0].shape[0]))
+    print("# edges used for test: " + str(test_edges.shape))
+    print("# nr of cv sets: " + str(len(adj_train)))
+    print("++++++++++++++++++++++++++++++++++++++++++++++++++++\n") 
+    
+    return adj_train, crossval_edges, test_edges, test_edges_false
