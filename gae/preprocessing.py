@@ -178,7 +178,7 @@ def gen_crossval_edges(adj):
     print("# edges in original graph: " + str(num_edges))
     print("# edges used for training: " + str(train_edges[0].shape[0]))
     print("# edges used for validation: " + str(val_edges[0].shape[0]))
-    print("# edges used for test: " + str(test_edges.shape))
+    print("# edges used for test: " + str(test_edges.shape[0]))
     print("# nr of cv sets: " + str(len(adj_train)))
     print("++++++++++++++++++++++++++++++++++++++++++++++++++++\n") 
     

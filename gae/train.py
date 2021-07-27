@@ -1,111 +1,27 @@
-from __future__ import division
-from __future__ import print_function
-
-import time
-import os
-import matplotlib.pyplot as plt
-
-# Train on CPU (hide GPU) due to memory constraints
-os.environ['CUDA_VISIBLE_DEVICES'] = ""
-
 import tensorflow as tf
 import numpy as np
+import time
 import scipy.sparse as sp
 
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import average_precision_score
 
-from optimizer import OptimizerAE, OptimizerVAE
-from input_data import load_data
-from model import GCNModelAE, GCNModelVAE
-from preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple, mask_test_edges, gen_crossval_edges
+from outputs import viz_train_val_data, viz_roc_curve
 
-# Settings
-flags = tf.app.flags
-FLAGS = flags.FLAGS
-flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
-flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
-flags.DEFINE_integer('hidden1', 32, 'Number of units in hidden layer 1.')
-flags.DEFINE_integer('hidden2', 16, 'Number of units in hidden layer 2.')
-flags.DEFINE_float('weight_decay', 0., 'Weight for L2 loss on embedding matrix.')
-flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
-
-flags.DEFINE_string('model', 'gcn_ae', 'Model string.')
-flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
-flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
-
-model_str = FLAGS.model
-dataset_str = FLAGS.dataset
-model_timestamp = time.strftime("%Y%m%d_%H%M%S")
-
-# Load data
-adj, features = load_data(dataset_str)
-
-# Store original adjacency matrix (without diagonal entries) for later
-adj_orig = adj
-adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
-adj_orig.eliminate_zeros()
-
-adj_train, crossval_edges, test_edges, test_edges_false = gen_crossval_edges(adj_orig)
-adj = adj_train
-
-
-if FLAGS.features == 0:
-    features = sp.identity(features.shape[0])  # featureless
-
-# Some preprocessing
-adj_norm = [preprocess_graph(m) for m in adj]
-
-# Define placeholders
-placeholders = {
-    'features': tf.compat.v1.sparse_placeholder(tf.float32),
-    'adj': tf.compat.v1.sparse_placeholder(tf.float32),
-    'adj_orig': tf.compat.v1.sparse_placeholder(tf.float32),
-    'dropout': tf.compat.v1.placeholder_with_default(0., shape=())
-}
-
-num_nodes = adj[0].shape[0]
-
-features = sparse_to_tuple(features.tocoo())
-num_features = features[2][1]
-features_nonzero = features[1].shape[0]
-
-# Create model
-model = None
-if model_str == 'gcn_ae':
-    model = GCNModelAE(placeholders, num_features, features_nonzero)
-elif model_str == 'gcn_vae':
-    model = GCNModelVAE(placeholders, num_features, num_nodes, features_nonzero)
-
-
-pos_weight = float(adj[0].shape[0] * adj[0].shape[0] - adj[0].sum()) / adj[0].sum()
-norm = adj[0].shape[0] * adj[0].shape[0] / float((adj[0].shape[0] * adj[0].shape[0] - adj[0].sum()) * 2)
-
-# Optimizer
-with tf.name_scope('optimizer'):
-    if model_str == 'gcn_ae':
-        opt = OptimizerAE(preds=model.reconstructions,
-                          labels=tf.reshape(tf.sparse.to_dense(placeholders['adj_orig'],
-                                                                      validate_indices=False), [-1]),
-                          pos_weight=pos_weight,
-                          norm=norm)
-    elif model_str == 'gcn_vae':
-        opt = OptimizerVAE(preds=model.reconstructions,
-                           labels=tf.reshape(tf.sparse.to_dense(placeholders['adj_orig'],
-                                                                       validate_indices=False), [-1]),
-                           model=model, num_nodes=num_nodes,
-                           pos_weight=pos_weight,
-                           norm=norm)
-
-adj_label = [(m + sp.eye(m.shape[0])) for m in adj_train]
-adj_label = [sparse_to_tuple(m) for m in adj_label]
-
-
-def train_model(FLAGS, adj_norm, adj_label, edges, features, placeholders, opt, sess, feed_dict):
+def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dict, model_str, model_timestamp):
     # Initialize session
     sess.run(tf.compat.v1.global_variables_initializer())
 
-    val_ap, val_roc_score, train_ap, train_roc_score, train_loss, train_acc, train_kl = ([] for i in range(7))
+    loss_train, kl_train, acc_train, ap_train, roc_train, loss_val, acc_val, ap_val, roc_val = ([] for i in range(9))
+    hist_scores = [loss_train, kl_train, acc_train, ap_train, roc_train, loss_val, acc_val, ap_val, roc_val]
+
+    #implement first metrics
+    #train_loss, train_acc, train_ap, train_roc = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
+    #val_loss, val_acc, val_ap, val_roc = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp)
+    #scores = [train_loss, train_acc, train_ap, train_roc, val_loss, val_acc, val_ap, val_roc]    
+    
+    #for x, l in zip(scores, hist_scores):
+    #    l.append(x)
 
     for epoch in range(FLAGS.epochs):
 
@@ -119,72 +35,59 @@ def train_model(FLAGS, adj_norm, adj_label, edges, features, placeholders, opt, 
 
         # Compute metrics
         train_edges, train_edges_false, val_edges, val_edges_false = edges
+        adj_pred = predict_adj(feed_dict, sess, model, model_timestamp, placeholders)
 
-        avg_cost = outs[1]
-        train_loss.append(avg_cost)
-        avg_accuracy = outs[2]
-        train_acc.append(avg_accuracy)
+        ctrl_cost = outs[1]
+        ctrl_accuracy = outs[2]
+
         if model_str == 'gcn_vae':
-            avg_kl = outs[3]
-            train_kl.append(avg_kl)
+            train_kl = outs[3]
+        else:
+            train_kl = 0
 
-        roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false, sess, feed_dict)
-        val_roc_score.append(roc_curr)
-        val_ap.append(ap_curr)
+        _, total_train_acc, train_loss, train_acc, train_ap, train_roc = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
+        _, _, val_loss, val_acc, val_ap, val_roc = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp)
         
-        roc_train, ap_train = get_roc_score(train_edges, train_edges_false, sess, feed_dict)
-        train_roc_score.append(roc_train)
-        train_ap.append(ap_train)
-
-        print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
-              "train_acc=", "{:.5f}".format(avg_accuracy), "val_roc=", "{:.5f}".format(val_roc_score[-1]),
-              "val_ap=", "{:.5f}".format(ap_curr),
+        scores = [train_loss, train_kl, train_acc, train_ap, train_roc, val_loss, val_acc, val_ap, val_roc]
+        for x, l in zip(scores, hist_scores):
+            l.append(x)
+        
+        print("Epoch:", '%04d' % (epoch + 1),
+              "train_loss=", "{:.5f}".format(train_loss),
+              #"train_loss_control=", "{:.5f}".format(ctrl_cost),
+              #"recon loss=", "{:.5f}".format(train_loss-train_kl), "kl_loss=", "{:.5f}".format(train_kl),
+              "val_loss=", "{:.5f}".format(val_loss), 
+              #"train_acc_control=", "{:.5f}".format(ctrl_accuracy),
+              "total_train_acc=", "{:.5f}".format(total_train_acc),
+              #"train_acc=", "{:.5f}".format(train_acc),
+              #"train_ap=", "{:.5f}".format(train_ap), "train_roc=", "{:.5f}".format(train_roc),
+              #"val_acc=", "{:.5f}".format(val_acc),
+              "val_ap=", "{:.5f}".format(val_ap), "val_roc=", "{:.5f}".format(val_roc),
               "time=", "{:.5f}".format(time.time() - t))
 
     print("Optimization Finished!")
 
     # Plot training & validation metrics
-    figure, axis = plt.subplots(2,2)
+    viz_train_val_data(hist_scores, model_str, model_timestamp)
 
-    axis[0, 0].plot(train_loss)
-    axis[0, 0].set_title('Total loss')
-    axis[0, 0].set_xlabel('Epoch')
+    return acc_val[-1], ap_val[-1], roc_val[-1]
 
-    axis[0, 1].plot(train_ap)
-    axis[0, 1].plot(val_ap, color='tab:orange')
-    axis[0, 1].set_ylim([0.7, 1.0])
-    axis[0, 1].set_title('Average Precision')
-    axis[0, 1].set_xlabel('Epoch')
-
-    axis[1, 0].plot([np.subtract(x1, x2) for (x1, x2) in zip(train_loss, train_kl)])
-    axis[1, 0].set_title('Recon loss')
-    axis[1, 0].set_xlabel('Epoch')
-    if model_str == 'gcn_vae':
-        axis2 = axis[1, 0].twinx()
-        axis2.plot(train_kl, color='tab:orange')
-        axis[1, 0].set_title('Recon/KL loss')
-
-    axis[1, 1].plot(train_roc_score)
-    axis[1, 1].plot(val_roc_score, color='tab:orange')
-    axis[1, 1].set_ylim([0.7, 1.0])
-    axis[1, 1].set_title('ROC AUC')
-    axis[1, 1].set_xlabel('Epoch')
-
-    figure.tight_layout()
-    plt.savefig('results/training/' + model_timestamp + '_training_history.png', dpi=300)
-
-    return val_ap[-1], val_roc_score[-1]
-
-def get_roc_score(edges_pos, edges_neg, sess, feed_dict,emb=None):
+def predict_adj(feed_dict, sess, model, model_timestamp, placeholders, emb=None, save_adj=False):
     if emb is None:
         feed_dict.update({placeholders['dropout']: 0})
         emb = sess.run(model.z_mean, feed_dict=feed_dict)
 
-    def sigmoid(x):
-        return 1 / (1 + np.exp(-x))
-
-    # Predict on test set of edges
     adj_rec = np.dot(emb, emb.T)
+    if save_adj:
+        np.savetxt('results/graphs/' + model_timestamp + '_adj_pred'  + '.csv', sigmoid(adj_rec), delimiter=";")
+
+    return adj_rec
+
+def get_scores(adj_rec, adj_orig, edges_pos, edges_neg, model_timestamp, viz_roc=False, random=False):
+
+    if random:
+        adj_rec = random_adj(adj_rec, (adj_orig.sum()-adj_rec.sum())/2, mode="random_noraml")
+      
     preds = []
     pos = []
     for e in edges_pos:
@@ -202,27 +105,62 @@ def get_roc_score(edges_pos, edges_neg, sess, feed_dict,emb=None):
     roc_score = roc_auc_score(labels_all, preds_all)
     ap_score = average_precision_score(labels_all, preds_all)
 
-    return roc_score, ap_score
+    if viz_roc:
+        viz_roc_curve(roc_score, preds_all, labels_all, model_timestamp)
 
-val_ap_cv = []
-val_roc_score_cv = []
-sess = tf.compat.v1.Session()
-feed_dict = None
+    #Total accuracy and loss
+    adj_curr = adj_from_edges(edges_pos, adj_orig.shape)
+    adj_curr = adj_curr.reshape(1, -1)
+    adj_rec = adj_rec.reshape(1, -1)
+    
+    pos_weight = float(adj_orig.shape[0] * adj_orig.shape[0] - (edges_pos.shape[0] * 2)) / (edges_pos.shape[0] * 2)
+    norm = adj_orig.shape[0] * adj_orig.shape[0] / float((adj_orig.shape[0] * adj_orig.shape[0] - (edges_pos.shape[0] * 2)) * 2)
+    cost_total = norm * np.mean(weighted_cross_entropy_with_logits(adj_curr, adj_rec, pos_weight))
 
-for cv_set in range(len(adj)-17):
-    print("\nCV run " + str(cv_set+1) + " of " + str(len(adj)) + "...")
-    # Construct feed dictionary
-    feed_dict = construct_feed_dict(adj_norm[cv_set], adj_label[cv_set], features, placeholders)
-    feed_dict.update({placeholders['dropout']: FLAGS.dropout})
-    # Train model
-    val_ap, val_roc_score = train_model(FLAGS, adj_norm[cv_set], adj_label[cv_set], [x[cv_set] for x in crossval_edges], features, placeholders, opt, sess, feed_dict)
-    val_ap_cv.append(val_ap)
-    val_roc_score_cv.append(val_roc_score)
+    correct_prediction = (sigmoid(adj_rec) > 0.5) == adj_curr
+    accuracy_total = np.mean(correct_prediction)
 
-roc_score, ap_score = get_roc_score(test_edges, test_edges_false, sess, feed_dict)
+    #Subset accuracy and loss
+    test_mask = adj_from_edges(np.hstack([edges_pos, edges_neg]), adj_orig.shape, diag=0)
+    test_mask = test_mask.reshape(1, -1)
+    accuracy = np.mean(correct_prediction[test_mask==1])
+    cost = np.mean(weighted_cross_entropy_with_logits(adj_curr[test_mask==1], adj_rec[test_mask==1], 1))
+    
+    return cost_total, accuracy_total, cost, accuracy, roc_score, ap_score
 
-print("\n10 fold CV Average AP: " + str(np.round(np.mean(val_ap_cv),2)))
-print("10 fold CV ROC AUC score: " + str(np.round(np.mean(val_roc_score_cv),2)))
+def weighted_cross_entropy_with_logits(label, pred, pos_weight):
+    return ((1 - label) * pred + (1 + (pos_weight - 1) * label) * (np.log(1 + np.exp(-abs(pred))) + np.maximum(-pred, 0)))
 
-print('Test ROC score: ' + str(np.round(roc_score,2)))
-print('Test AP score: ' + str(np.round(ap_score,2)))
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def adj_from_edges(edges, shape, diag=1):
+    data = np.ones(edges.shape[0])
+    adj = sp.csr_matrix((data, (edges[:, 0], edges[:, 1])), shape=shape)
+    adj = adj + adj.T
+    if diag==1:
+        adj = adj + sp.eye(adj.shape[0])
+
+    return np.array(adj.todense())
+
+def random_adj(adj, edges_to_add, mode="add_edges"):
+    if mode=="add_edges":
+        edges_added = 0
+        adj[adj==0] = -1
+        while edges_added < edges_to_add:
+            idx_i = np.random.randint(0, adj.shape[0])
+            idx_j = np.random.randint(0, adj.shape[0])
+            if idx_i == idx_j:
+                continue
+            elif adj[idx_i, idx_j] == 1:
+                continue
+            else:
+                adj[idx_i, idx_j] = 1
+                adj[idx_j, idx_i] = 1
+                edges_added += 1
+    elif mode=="random_normal":
+        adj = np.random.normal(size=adj.shape)
+        
+    return adj
+                
+    
