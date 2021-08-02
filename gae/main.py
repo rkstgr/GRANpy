@@ -98,7 +98,7 @@ with tf.name_scope('optimizer'):
 adj_label = [(m + sp.eye(m.shape[0])) for m in adj_train]
 adj_label = [sparse_to_tuple(m) for m in adj_label]
 
-acc_cv, ap_cv, roc_cv = ([] for i in range(3))
+acc_cv, ap_cv, roc_cv, acc_init_cv, ap_init_cv, roc_init_cv = ([] for i in range(6))
 
 sess = tf.compat.v1.Session()
 feed_dict = None
@@ -110,9 +110,9 @@ for cv_set in range(iterations):
     feed_dict = construct_feed_dict(adj_norm[cv_set], adj_label[cv_set], features, placeholders)
     feed_dict.update({placeholders['dropout']: FLAGS.dropout})
     # Train model
-    acc_last, ap_last, roc_last = train_model(adj_orig, FLAGS, [x[cv_set] for x in crossval_edges],
+    acc_last, ap_last, roc_last, acc_init, ap_init, roc_init = train_model(adj_orig, FLAGS, [x[cv_set] for x in crossval_edges],
                                         placeholders, opt, sess, model, feed_dict, model_str, model_timestamp)
-    for x,l in zip([acc_last, ap_last, roc_last], [acc_cv, ap_cv, roc_cv]):
+    for x,l in zip([acc_last, ap_last, roc_last, acc_init, ap_init, roc_init], [acc_cv, ap_cv, roc_cv, acc_init_cv, ap_init_cv, roc_init_cv]):
         l.append(x)
 
 #Save last predicted adj matrix
@@ -134,7 +134,11 @@ print('\nTest ROC score: ' + str(np.round(test_roc,2)))
 print('Test AP score: ' + str(np.round(test_ap,2)))
 print('Test accuracy: ' + str(np.round(test_acc,2)))
 
-print('\nControl ROC score: ' + str(np.round(random_roc,2)))
-print('Control AP score: ' + str(np.round(random_ap,2)))
-print('Control accuracy: ' + str(np.round(random_acc,2)))
+print('\nRandom Control ROC score: ' + str(np.round(random_roc,2)))
+print('Random Control AP score: ' + str(np.round(random_ap,2)))
+print('Random Control accuracy: ' + str(np.round(random_acc,2)))
+
+print('\nAverage Init ROC score: ' + str(np.round(np.mean(roc_init_cv),2)))
+print('Average Init AP score: ' + str(np.round(np.mean(ap_init_cv),2)))
+print('Average Init accuracy: ' + str(np.round(np.mean(acc_init_cv),2)))
 

@@ -18,7 +18,7 @@ def viz_train_val_data(hist_scores, model_str, model_timestamp):
     axis[0, 1].set_title('Average Precision')
     axis[0, 1].set_xlabel('Epoch')
 
-    axis[1, 0].plot([np.subtract(x1, x2) for (x1, x2) in zip(loss_train, kl_train)])
+    axis[1, 0].plot([np.subtract(x1, x2) for (x1, x2) in zip(loss_train[1:], kl_train[1:])])
     axis[1, 0].set_title('Recon loss')
     axis[1, 0].set_xlabel('Epoch')
     if model_str == 'gcn_vae':

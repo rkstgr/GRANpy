@@ -15,13 +15,16 @@ def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dic
     loss_train, kl_train, acc_train, ap_train, roc_train, loss_val, acc_val, ap_val, roc_val = ([] for i in range(9))
     hist_scores = [loss_train, kl_train, acc_train, ap_train, roc_train, loss_val, acc_val, ap_val, roc_val]
 
-    #implement first metrics
-    #train_loss, train_acc, train_ap, train_roc = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
-    #val_loss, val_acc, val_ap, val_roc = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp)
-    #scores = [train_loss, train_acc, train_ap, train_roc, val_loss, val_acc, val_ap, val_roc]    
-    
-    #for x, l in zip(scores, hist_scores):
-    #    l.append(x)
+    #initial metrics
+    train_edges, train_edges_false, val_edges, val_edges_false = edges
+    adj_pred = predict_adj(feed_dict, sess, model, model_timestamp, placeholders)
+    _, _, train_loss, train_acc, train_ap, train_roc = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
+    _, _, val_loss, val_acc, val_ap, val_roc = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp)
+    train_kl = None
+
+    scores = [train_loss, train_kl, train_acc, train_ap, train_roc, val_loss, val_acc, val_ap, val_roc]    
+    for x, l in zip(scores, hist_scores):
+        l.append(x)
 
     for epoch in range(FLAGS.epochs):
 
@@ -34,7 +37,6 @@ def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dic
             outs = sess.run([opt.opt_op, opt.cost, opt.accuracy], feed_dict=feed_dict)
 
         # Compute metrics
-        train_edges, train_edges_false, val_edges, val_edges_false = edges
         adj_pred = predict_adj(feed_dict, sess, model, model_timestamp, placeholders)
 
         ctrl_cost = outs[1]
@@ -70,7 +72,7 @@ def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dic
     # Plot training & validation metrics
     viz_train_val_data(hist_scores, model_str, model_timestamp)
 
-    return acc_val[-1], ap_val[-1], roc_val[-1]
+    return acc_val[-1], ap_val[-1], roc_val[-1], acc_val[0], ap_val[0], roc_val[0] 
 
 def predict_adj(feed_dict, sess, model, model_timestamp, placeholders, emb=None, save_adj=False):
     if emb is None:
