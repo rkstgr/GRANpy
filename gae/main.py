@@ -30,11 +30,11 @@ flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
 flags.DEFINE_integer('early_stopping', 5, 'Tolerance for early stopping (# of epochs).')
 
 flags.DEFINE_string('model', 'gcn_ae', 'Model string.')
-flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
+flags.DEFINE_string('dataset', 'yeast_gasch', 'Dataset string.')
 flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
 flags.DEFINE_integer('crossvalidation', 0, 'Whether to use crossvalidation (1) or not (0).')
 
-flags.DEFINE_integer('hp_optimization', 0, 'Whether to start the hyperparameter optimization run')
+flags.DEFINE_integer('hp_optimization', 0, 'Whether to start the hyperparameter optimization run (1) or not (0).')
 
 model_str = FLAGS.model
 dataset_str = FLAGS.dataset
