@@ -25,60 +25,61 @@ In order to use your own data, you have to provide
 
 Have a look at the `load_data()` function in `input_data.py` for an example.
 
-In this example, we load 
-
-You can specify a dataset as follows:
-
-```bash
-python main.py --dataset nameofdataset
-```
-
-(or by editing `train.py`)
-
 ### --learning_rate
 > Default: 0.00005
+
 Initial learning rate.
 
 ### --epochs
 > Default: 200
+
 Number of epochs to train.
 
 ### --hidden1
 > Default: 12
+
 Number of units in hidden layer 1.
 
 ### --hidden2
 > Default: 10
+
 Number of units in hidden layer 2.
 
 ### --weight_decay
 > Default: 0
+
 Weight for L2 loss on embedding matrix.
 
 ### --dropout
 > Default: 0
+
 Dropout rate (1 - keep probability).
 
 ### --early_stopping
 > Default: 5
+
 Tolerance for early stopping (# of epochs).
 
 ### --model
 > Default: gcn_ae
+
 You can choose between the following models: 
 * `gcn_ae`: Graph Auto-Encoder (with GCN encoder)
 * `gcn_vae`: Variational Graph Auto-Encoder (with GCN encoder)
 
 ### --features
 > Default: 1
+
 Whether to use features (1) or not (0).
 
 ### --crossvalidation
 > Default: 0
+
 Whether to use crossvalidation (1) or not (0).
 
 ### --hp_optimization
 > Default: 0
+
 Whether to start the hyperparameter optimization run (1) or not (0).
 
 ## Original paper by Kipf et. al. 2016 (Graph Auto-Encoders)
