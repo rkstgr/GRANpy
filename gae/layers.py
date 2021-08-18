@@ -85,7 +85,7 @@ class GraphConvolution(Layer):
 
 class GraphConvolutionSparse(Layer):
     """Graph convolution layer for sparse inputs."""
-    def __init__(self, input_dim, output_dim, adj, features_nonzero, dropout=0., act=tf.nn.relu, **kwargs):
+    def __init__(self, input_dim, output_dim, adj, features_nonzero, dropout=0., act=tf.nn.leaky_relu, **kwargs):
         super(GraphConvolutionSparse, self).__init__(**kwargs)
         with tf.compat.v1.variable_scope(self.name + '_vars'):
             self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name="weights")
@@ -100,7 +100,7 @@ class GraphConvolutionSparse(Layer):
         x = dropout_sparse(x, 1-self.dropout, self.features_nonzero)
         x = tf.sparse.sparse_dense_matmul(x, self.vars['weights'])
         x = tf.sparse.sparse_dense_matmul(self.adj, x)
-        outputs = self.act(x)
+        outputs = self.act(x, alpha=0.2)
         return outputs
 
 

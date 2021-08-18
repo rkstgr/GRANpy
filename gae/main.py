@@ -8,29 +8,33 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
 
 import tensorflow as tf
+from tensorboard.plugins.hparams import api as hp
 import numpy as np
 import scipy.sparse as sp
 
 from optimizer import OptimizerAE, OptimizerVAE
 from input_data import load_data
 from model import GCNModelAE, GCNModelVAE
-from preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple, mask_test_edges, gen_crossval_edges
-from train import train_model, predict_adj, get_scores
+from preprocessing import preprocess_graph, sparse_to_tuple, gen_crossval_edges
+from train import train_test_model
 
 # Settings
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
+flags.DEFINE_float('learning_rate', 0.00005, 'Initial learning rate.')
 flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
-flags.DEFINE_integer('hidden1', 32, 'Number of units in hidden layer 1.')
-flags.DEFINE_integer('hidden2', 16, 'Number of units in hidden layer 2.')
+flags.DEFINE_integer('hidden1', 12, 'Number of units in hidden layer 1.')
+flags.DEFINE_integer('hidden2', 10, 'Number of units in hidden layer 2.')
 flags.DEFINE_float('weight_decay', 0., 'Weight for L2 loss on embedding matrix.')
 flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
+flags.DEFINE_integer('early_stopping', 5, 'Tolerance for early stopping (# of epochs).')
 
 flags.DEFINE_string('model', 'gcn_ae', 'Model string.')
 flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
 flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
-flags.DEFINE_integer('crossvalidation', 1, 'Whether to use crossvalidation (1) or not (0).')
+flags.DEFINE_integer('crossvalidation', 0, 'Whether to use crossvalidation (1) or not (0).')
+
+flags.DEFINE_integer('hp_optimization', 0, 'Whether to start the hyperparameter optimization run')
 
 model_str = FLAGS.model
 dataset_str = FLAGS.dataset
@@ -98,47 +102,53 @@ with tf.name_scope('optimizer'):
 adj_label = [(m + sp.eye(m.shape[0])) for m in adj_train]
 adj_label = [sparse_to_tuple(m) for m in adj_label]
 
-acc_cv, ap_cv, roc_cv, acc_init_cv, ap_init_cv, roc_init_cv = ([] for i in range(6))
+#Train and test model
+if FLAGS.hp_optimization:
+    #Hyperparameter Optimization
+    HP_NUM_UNITS1 = hp.HParam('num_units1', hp.Discrete([2, 5, 8, 12, 16, 32, 64, 128]))
+    HP_RATIO_UNITS2 = hp.HParam('ratio_units2', hp.Discrete([0.1, 0.25, 0.4, 0.65, 0.8]))
+    HP_LR = hp.HParam('lr', hp.Discrete([0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1]))
 
-sess = tf.compat.v1.Session()
-feed_dict = None
-iterations = 1 + FLAGS.crossvalidation * (len(adj) - 1)
+    session_num = 0
+    val_acc, val_ap, val_roc = (tf.Variable(0, dtype=tf.float32) for i in range(3))
+    val_acc_sum = tf.summary.scalar('Validation Accuracy', val_acc)
+    val_ap_sum = tf.summary.scalar('Validation Average Precision', val_ap)
+    val_roc_sum = tf.summary.scalar('Validation ROC AUC', val_roc)
+    tb_sess = tf.Session()
 
-for cv_set in range(iterations):
-    print("\nCV run " + str(cv_set+1) + " of " + str(iterations) + "...")
-    # Construct feed dictionary
-    feed_dict = construct_feed_dict(adj_norm[cv_set], adj_label[cv_set], features, placeholders)
-    feed_dict.update({placeholders['dropout']: FLAGS.dropout})
-    # Train model
-    acc_last, ap_last, roc_last, acc_init, ap_init, roc_init = train_model(adj_orig, FLAGS, [x[cv_set] for x in crossval_edges],
-                                        placeholders, opt, sess, model, feed_dict, model_str, model_timestamp)
-    for x,l in zip([acc_last, ap_last, roc_last, acc_init, ap_init, roc_init], [acc_cv, ap_cv, roc_cv, acc_init_cv, ap_init_cv, roc_init_cv]):
-        l.append(x)
-
-#Save last predicted adj matrix
-adj_pred = predict_adj(feed_dict, sess, model, model_timestamp, placeholders, save_adj=True)
-
-#Plot ROC curve
-_, _, test_loss, test_acc, test_ap, test_roc = get_scores(adj_pred, adj_orig, test_edges, test_edges_false, model_timestamp, viz_roc=True)
-_, _, _, random_acc, random_ap, random_roc = get_scores(np.array(adj[0].todense()), adj_orig, test_edges, test_edges_false, (model_timestamp + "_random"), viz_roc=True, random=True)
-
-if FLAGS.crossvalidation:
-    cv_str = str(iterations) + " fold CV "
+    for num_units1 in HP_NUM_UNITS1.domain.values:
+      for ratio_units2 in HP_RATIO_UNITS2.domain.values:
+        for lr in HP_LR.domain.values:
+            hparams = {
+                HP_NUM_UNITS1: num_units1,
+                HP_RATIO_UNITS2: ratio_units2,
+                HP_LR: lr,
+            }
+            FLAGS.learning_rate = hparams[HP_LR]
+            FLAGS.hidden1 = hparams[HP_NUM_UNITS1]
+            FLAGS.hidden2 = np.ceil(hparams[HP_RATIO_UNITS2]*hparams[HP_NUM_UNITS1])
+            run_name = "run" + str(session_num) + "_" + model_str + "_hid1-" + str(FLAGS.hidden1) + "_hid2-" + str(FLAGS.hidden2) + "_lr-" + str(FLAGS.learning_rate)
+            print('--- Starting trial %d' % session_num)
+            print({h.name: hparams[h] for h in hparams})
+            writer = tf.compat.v1.summary.FileWriter('logs/hparam_tuning/' + model_timestamp +'/' + run_name)
+            acc, ap, roc = train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_edges,
+                                            placeholders, opt, model, model_str, (model_timestamp + '_' + run_name),
+                                            adj, test_edges, test_edges_false)
+            tb_sess.run(val_acc.assign(acc))
+            tb_sess.run(val_ap.assign(ap))
+            tb_sess.run(val_roc.assign(roc))
+            writer.add_summary(tb_sess.run(val_acc_sum), 1)
+            writer.add_summary(tb_sess.run(val_ap_sum), 1)
+            writer.add_summary(tb_sess.run(val_roc_sum), 1)
+            
+            writer.flush()
+            writer.close()
+            session_num += 1
+      
 else:
-    cv_str = "Validation "
-print("\n" + cv_str + "ROC AUC score: " + str(np.round(np.mean(roc_cv),2)))
-print(cv_str + "Average Precision: " + str(np.round(np.mean(ap_cv),2)))
-print(cv_str + "Accuracy: " + str(np.round(np.mean(acc_cv),2)))
-
-print('\nTest ROC score: ' + str(np.round(test_roc,2)))
-print('Test AP score: ' + str(np.round(test_ap,2)))
-print('Test accuracy: ' + str(np.round(test_acc,2)))
-
-print('\nRandom Control ROC score: ' + str(np.round(random_roc,2)))
-print('Random Control AP score: ' + str(np.round(random_ap,2)))
-print('Random Control accuracy: ' + str(np.round(random_acc,2)))
-
-print('\nAverage Init ROC score: ' + str(np.round(np.mean(roc_init_cv),2)))
-print('Average Init AP score: ' + str(np.round(np.mean(ap_init_cv),2)))
-print('Average Init accuracy: ' + str(np.round(np.mean(acc_init_cv),2)))
-
+    #Run model with given hyperparameters
+    model_timestamp = model_timestamp + "_" + model_str + "_hid1-" + str(FLAGS.hidden1) + "_hid2-" + str(FLAGS.hidden2) + "_lr-" + str(FLAGS.learning_rate)
+    _, _, _ = train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_edges,
+                               placeholders, opt, model, model_str, model_timestamp,
+                               adj, test_edges, test_edges_false)
+    

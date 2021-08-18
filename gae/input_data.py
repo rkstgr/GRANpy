@@ -23,13 +23,14 @@ def load_data(dataset):
 
         #preprocess matrices (remove isolated nodes, scale features 0-1, make graph undirected, remove self edges)
         adj, features = crop_isolated_nodes(adj, features)
-        features = preprocessing.MinMaxScaler().fit_transform(features)
+        features = preprocessing.StandardScaler().fit_transform(features)
         adj = preprocess_input_adj(adj, sym=True, diag=0)
 
         adj = sp.csr_matrix(adj)
         features = sp.csr_matrix(features)
         print("shape of adj matrix: " + str(adj.shape))
         print("shape of features matrix: " + str(features.shape))
+        np.savetxt('data/' + dataset + '_features_zero_mean' + '.csv', features.toarray(), delimiter=";")
         
         return adj, features
     

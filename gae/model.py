@@ -56,7 +56,7 @@ class GCNModelAE(Model):
                                               output_dim=FLAGS.hidden1,
                                               adj=self.adj,
                                               features_nonzero=self.features_nonzero,
-                                              act=tf.nn.relu,
+                                              act=tf.nn.leaky_relu,
                                               dropout=self.dropout,
                                               logging=self.logging)(self.inputs)
 
@@ -91,7 +91,7 @@ class GCNModelVAE(Model):
                                               output_dim=FLAGS.hidden1,
                                               adj=self.adj,
                                               features_nonzero=self.features_nonzero,
-                                              act=tf.nn.relu,
+                                              act=tf.nn.leaky_relu,
                                               dropout=self.dropout,
                                               logging=self.logging)(self.inputs)
 
