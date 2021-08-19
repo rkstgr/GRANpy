@@ -12,10 +12,10 @@ def viz_train_val_data(hist_scores, model_str, model_timestamp):
     axis[0, 0].set_title('Total loss')
     axis[0, 0].set_xlabel('Epoch')
 
-    axis[0, 1].plot(acc_train)
-    axis[0, 1].plot(acc_val, color='tab:orange')
+    axis[0, 1].plot(ap_train)
+    axis[0, 1].plot(ap_val, color='tab:orange')
     #axis[0, 1].set_ylim([0.5, 1.0])
-    axis[0, 1].set_title('Accuracy')
+    axis[0, 1].set_title('Average Precision')
     axis[0, 1].set_xlabel('Epoch')
 
     axis[1, 0].plot([np.subtract(x1, x2) for (x1, x2) in zip(loss_train[1:], kl_train[1:])])

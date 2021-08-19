@@ -3,7 +3,7 @@ import numpy as np
 import time
 import scipy.sparse as sp
 
-from sklearn.metrics import roc_auc_score, average_precision_score, roc_curve
+from sklearn.metrics import roc_auc_score, average_precision_score, roc_curve, precision_recall_curve
 
 from preprocessing import construct_feed_dict
 from outputs import viz_train_val_data, viz_roc_pr_curve, max_gmean_thresh
@@ -31,10 +31,10 @@ def train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_ed
 
     #Resulting ROC curve
     viz_roc = True
-    _, _, test_loss, test_acc, test_ap, test_roc, _ = get_scores(adj_pred, adj_orig, test_edges, test_edges_false, model_timestamp, viz_roc=viz_roc, thresh=opt_thresh)
+    _, _, test_loss, test_acc, test_ap, test_roc, _, _ = get_scores(adj_pred, adj_orig, test_edges, test_edges_false, model_timestamp, viz_roc=viz_roc, thresh=opt_thresh)
     #Random ROC curve
     viz_random_roc = False
-    _, _, _, random_acc, random_ap, random_roc, _ = get_scores(np.array(adj[0].todense()), adj_orig, test_edges, test_edges_false, (model_timestamp + "_random"), viz_roc=viz_random_roc, random=True)
+    _, _, _, random_acc, random_ap, random_roc, _, _ = get_scores(np.array(adj[0].todense()), adj_orig, test_edges, test_edges_false, (model_timestamp + "_random"), viz_roc=viz_random_roc, random=True)
 
     if FLAGS.crossvalidation:
         cv_str = str(iterations) + " fold CV "
@@ -62,15 +62,15 @@ def train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_ed
 def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dict, model_str, model_timestamp):
     # Initialize session
     sess.run(tf.compat.v1.global_variables_initializer())
-
+    
     loss_train, kl_train, acc_train, ap_train, roc_train, loss_val, acc_val, ap_val, roc_val = ([] for i in range(9))
     hist_scores = [loss_train, kl_train, acc_train, ap_train, roc_train, loss_val, acc_val, ap_val, roc_val]
 
     #initial metrics
     train_edges, train_edges_false, val_edges, val_edges_false = edges
     adj_pred = predict_adj(feed_dict, sess, model, model_timestamp, placeholders)
-    _, _, train_loss, train_acc, train_ap, train_roc, opt_thresh = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
-    _, _, val_loss, val_acc, val_ap, val_roc, _ = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp, thresh=opt_thresh)
+    _, _, train_loss, train_acc, train_ap, train_roc, _, opt_thresh = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
+    _, _, val_loss, val_acc, val_ap, val_roc, _, _ = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp, thresh=opt_thresh)
     train_kl = None
 
     scores = [train_loss, train_kl, train_acc, train_ap, train_roc, val_loss, val_acc, val_ap, val_roc]    
@@ -98,8 +98,8 @@ def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dic
         else:
             train_kl = 0
 
-        _, total_train_acc, train_loss, train_acc, train_ap, train_roc, opt_thresh = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
-        _, _, val_loss, val_acc, val_ap, val_roc, _ = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp, thresh=opt_thresh)
+        _, total_train_acc, train_loss, train_acc, train_ap, train_roc, train_rc_p99, opt_thresh = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
+        _, _, val_loss, val_acc, val_ap, val_roc, val_rc_p99, _ = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp, thresh=opt_thresh)
         
         scores = [train_loss, train_kl, train_acc, train_ap, train_roc, val_loss, val_acc, val_ap, val_roc]
         for x, l in zip(scores, hist_scores):
@@ -116,7 +116,9 @@ def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dic
               "train_acc=", "{:.5f}".format(train_acc),
               #"train_ap=", "{:.5f}".format(train_ap), "train_roc=", "{:.5f}".format(train_roc),
               "val_acc=", "{:.5f}".format(val_acc),
-              "val_ap=", "{:.5f}".format(val_ap), "val_roc=", "{:.5f}".format(val_roc))
+              #"val_ap=", "{:.5f}".format(val_ap),
+              "val_rc_p99=", "{:.5f}".format(val_rc_p99),
+              "val_roc=", "{:.5f}".format(val_roc))
         
         if epoch > FLAGS.early_stopping and loss_val[-1] > np.mean(loss_val[-(FLAGS.early_stopping+1):-1]):
             print("\nEarly stopping...")
@@ -139,7 +141,7 @@ def predict_adj(feed_dict, sess, model, model_timestamp, placeholders, emb=None,
 
     adj_rec = np.dot(emb, emb.T)
     if save_adj:
-        np.savetxt('logs/outputs/' + model_timestamp + '_adj_pred'  + '.csv', sigmoid(adj_rec), delimiter=";")
+        np.savetxt('logs/outputs/' + model_timestamp + '_adj_pred.csv', sigmoid(adj_rec), delimiter=";")
 
     return adj_rec
 
@@ -164,6 +166,9 @@ def get_scores(adj_rec, adj_orig, edges_pos, edges_neg, model_timestamp, viz_roc
     labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds_neg))])
     roc_score = roc_auc_score(labels_all, preds_all)
     ap_score = average_precision_score(labels_all, preds_all)
+    precision, recall, thresholds = precision_recall_curve(labels_all, preds_all)
+    p99_index = [i for i,p in enumerate(precision) if p<0.99][-1]
+    recall_p99 = recall[p99_index]
 
     if viz_roc:
         viz_roc_pr_curve(preds_all, labels_all, model_timestamp)
@@ -189,7 +194,7 @@ def get_scores(adj_rec, adj_orig, edges_pos, edges_neg, model_timestamp, viz_roc
     accuracy = np.mean(correct_prediction[test_mask==1])
     cost = np.mean(weighted_cross_entropy_with_logits(adj_curr[test_mask==1], adj_rec[test_mask==1], 1))
     
-    return cost_total, accuracy_total, cost, accuracy, roc_score, ap_score, thresh
+    return cost_total, accuracy_total, cost, accuracy, roc_score, ap_score, recall_p95, thresh
 
 def weighted_cross_entropy_with_logits(label, pred, pos_weight):
     return ((1 - label) * pred + (1 + (pos_weight - 1) * label) * (np.log(1 + np.exp(-abs(pred))) + np.maximum(-pred, 0)))

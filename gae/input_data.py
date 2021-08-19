@@ -23,7 +23,8 @@ def load_data(dataset):
 
         #preprocess matrices (remove isolated nodes, scale features 0-1, make graph undirected, remove self edges)
         adj, features = crop_isolated_nodes(adj, features)
-        features = preprocessing.StandardScaler().fit_transform(features)
+        #features = preprocessing.StandardScaler().fit_transform(features)
+        features= preprocessing.MinMaxScaler().fit_transform(features)
         adj = preprocess_input_adj(adj, sym=True, diag=0)
 
         adj = sp.csr_matrix(adj)
