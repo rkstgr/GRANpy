@@ -116,7 +116,7 @@ def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dic
               "train_acc=", "{:.5f}".format(train_acc),
               #"train_ap=", "{:.5f}".format(train_ap), "train_roc=", "{:.5f}".format(train_roc),
               "val_acc=", "{:.5f}".format(val_acc),
-              #"val_ap=", "{:.5f}".format(val_ap),
+              "val_ap=", "{:.5f}".format(val_ap),
               "val_rc_p99=", "{:.5f}".format(val_rc_p99),
               "val_roc=", "{:.5f}".format(val_roc))
         

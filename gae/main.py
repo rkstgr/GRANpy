@@ -99,7 +99,7 @@ with tf.name_scope('optimizer'):
                            norm=norm)
 
 adj_label = [(m + sp.eye(m.shape[0])) for m in adj_train]
-np.savetxt('logs/outputs/' + model_timestamp + '_adj_train.csv', adj_label[0].toarray(), delimiter=";")
+np.savetxt('logs/outputs/' + model_timestamp + '_adj_train.csv', adj_label[-1].toarray(), delimiter=";")
 adj_label = [sparse_to_tuple(m) for m in adj_label]
 
 #Train and test model
