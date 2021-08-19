@@ -33,7 +33,7 @@ def viz_train_val_data(hist_scores, model_str, model_timestamp):
     axis[1, 1].set_xlabel('Epoch')
 
     figure.tight_layout()
-    figure.savefig('results/training/' + model_timestamp + '_training_history.png', dpi=300)
+    figure.savefig('logs/training_plots/' + model_timestamp + '_training_history.png', dpi=300)
     plt.close(figure)
 
 def viz_roc_pr_curve(y_pred, y_true, model_timestamp):
@@ -78,7 +78,7 @@ def viz_roc_pr_curve(y_pred, y_true, model_timestamp):
     axis[2].set_xlim([0, 1])
 
     figure.tight_layout()
-    figure.savefig('results/training/' + model_timestamp + '_ROC_PR_curve.png', dpi=300)
+    figure.savefig('logs/training_plots/' + model_timestamp + '_ROC_PR_curve.png', dpi=300)
     plt.close(figure)
 
 def max_gmean_thresh(fpr, tpr, thresholds):

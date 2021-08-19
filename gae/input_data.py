@@ -30,7 +30,7 @@ def load_data(dataset):
         features = sp.csr_matrix(features)
         print("shape of adj matrix: " + str(adj.shape))
         print("shape of features matrix: " + str(features.shape))
-        np.savetxt('data/' + dataset + '_features_zero_mean' + '.csv', features.toarray(), delimiter=";")
+        #np.savetxt('data/' + dataset + '_features_zero_mean' + '.csv', features.toarray(), delimiter=";")
         
         return adj, features
     

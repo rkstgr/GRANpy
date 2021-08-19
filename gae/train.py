@@ -139,7 +139,7 @@ def predict_adj(feed_dict, sess, model, model_timestamp, placeholders, emb=None,
 
     adj_rec = np.dot(emb, emb.T)
     if save_adj:
-        np.savetxt('results/graphs/' + model_timestamp + '_adj_pred'  + '.csv', sigmoid(adj_rec), delimiter=";")
+        np.savetxt('logs/outputs/' + model_timestamp + '_adj_pred'  + '.csv', sigmoid(adj_rec), delimiter=";")
 
     return adj_rec
 
