@@ -13,7 +13,7 @@ def parse_index_file(filename):
     return index
 
 
-def load_data(dataset):
+def load_data(dataset, model_timestamp):
     if dataset not in ['cora','citeseer', 'pubmed']:
         #read csv files
         adj_path = 'data/' + dataset + '_input_adj.csv'
@@ -21,8 +21,10 @@ def load_data(dataset):
         adj = np.genfromtxt(adj_path, delimiter=';')
         features = np.genfromtxt(features_path, delimiter=';')
 
-        #preprocess matrices (remove isolated nodes, scale features 0-1, make graph undirected, remove self edges)
+        #preprocess matrices
+        #(remove isolated nodes, scale features 0-1, make graph undirected, remove self edges, shuffle nodes)
         adj, features = crop_isolated_nodes(adj, features)
+        adj, features, order = shuffle_nodes(adj, features)
         #features = preprocessing.StandardScaler().fit_transform(features)
         features= preprocessing.MinMaxScaler().fit_transform(features)
         adj = preprocess_input_adj(adj, sym=True, diag=0)
@@ -31,9 +33,9 @@ def load_data(dataset):
         features = sp.csr_matrix(features)
         print("shape of adj matrix: " + str(adj.shape))
         print("shape of features matrix: " + str(features.shape))
-        #np.savetxt('data/' + dataset + '_features_zero_mean' + '.csv', features.toarray(), delimiter=";")
+        np.savetxt('logs/outputs/' + model_timestamp + '_preprocessed_adj.csv', adj.toarray(), delimiter=";")
         
-        return adj, features
+        return adj, features, order
     
     # load the data: x, tx, allx, graph
     names = ['x', 'tx', 'allx', 'graph']
@@ -63,7 +65,7 @@ def load_data(dataset):
     np.savetxt('data/' + dataset + '_adj' + '.csv', adj.toarray(), delimiter=";")
     np.savetxt('data/' + dataset + '_features' + '.csv', features.toarray(), delimiter=";")
 
-    return adj, features
+    return adj, features, np.arrange(adj.shape[0])
 
 def crop_isolated_nodes(adj_orig, feat_orig):
     adj_cropped = adj_orig
@@ -75,7 +77,16 @@ def crop_isolated_nodes(adj_orig, feat_orig):
     np.delete(adj_cropped, isolated_nodes, axis=1)
     np.delete(feat_cropped, isolated_nodes, axis=0)
     
-    return(adj_cropped, feat_cropped)
+    return (adj_cropped, feat_cropped)
+
+def shuffle_nodes(adj_orig, feat_orig):
+    order = np.arange(adj_orig.shape[0])
+    np.random.shuffle(order)
+    adj_orig = adj_orig[order, :]
+    adj_orig = adj_orig[:, order]
+    feat_orig = feat_orig[order, :]
+        
+    return (adj_orig, feat_orig, order)
 
 def preprocess_input_adj(adj_orig, sym, diag):
     if sym:

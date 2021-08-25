@@ -62,6 +62,13 @@ def viz_roc_pr_curve(y_pred, y_true, model_timestamp):
     
     precision, recall, thresholds = precision_recall_curve(y_true, y_pred)
     axis[1].plot(recall, precision, label="positive class: auc="+str(np.round(auc(recall, precision),2)))
+
+    indexOpt = [i for i, j in enumerate(precision[1:]) if j == max(precision)]
+    if indexOpt[-1] == len(thresholds):
+        indexOpt_thr = indexOpt[-1] - 1
+    else:
+        indexOpt_thr = indexOpt[-1]
+    axis[1].plot(recall[indexOpt[-1]], precision[indexOpt[-1]], 'ro', label=('max precision threshold: ' + str(np.round(thresholds[indexOpt_thr],2))))
                     
     axis[1].set_title("PR curve")
     axis[1].set_xlabel("Recall")

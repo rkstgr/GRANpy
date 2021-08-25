@@ -41,14 +41,14 @@ dataset_str = FLAGS.dataset
 model_timestamp = time.strftime("%Y%m%d_%H%M%S") + '_' + dataset_str
 
 # Load data
-adj, features = load_data(dataset_str)
+adj, features, shuffle_order = load_data(dataset_str, model_timestamp)
 
 # Store original adjacency matrix (without diagonal entries) for later
 adj_orig = adj
 adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
 adj_orig.eliminate_zeros()
 
-adj_train, crossval_edges, test_edges, test_edges_false = gen_crossval_edges(adj_orig)
+adj_train, crossval_edges, test_edges, test_edges_false = gen_crossval_edges(adj_orig, FLAGS.crossvalidation)
 adj = adj_train
 
 if FLAGS.features == 0:

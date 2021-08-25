@@ -45,6 +45,9 @@ def mask_test_edges(adj,num_val=None, num_test=None):
     edges = adj_tuple[0]
     edges_all = sparse_to_tuple(adj)[0]
 
+    #asymetric metrics
+    edge_ratio = (adj.shape[0]*(adj.shape[0] - 1)/2 - edges.shape[0]) / edges.shape[0]
+
     if num_test is None:
         num_test = int(np.floor(edges.shape[0] * 0.1)) #10% of edges for test set
     if num_val is None:
@@ -65,7 +68,7 @@ def mask_test_edges(adj,num_val=None, num_test=None):
         return np.any(rows_close)
 
     test_edges_false = []
-    while len(test_edges_false) < len(test_edges):
+    while len(test_edges_false) < len(test_edges)*edge_ratio:
         idx_i = np.random.randint(0, adj.shape[0])
         idx_j = np.random.randint(0, adj.shape[0])
         if idx_i == idx_j:
@@ -80,7 +83,7 @@ def mask_test_edges(adj,num_val=None, num_test=None):
         test_edges_false.append([idx_i, idx_j])
 
     val_edges_false = []
-    while len(val_edges_false) < len(val_edges):
+    while len(val_edges_false) < len(val_edges)*edge_ratio:
         idx_i = np.random.randint(0, adj.shape[0])
         idx_j = np.random.randint(0, adj.shape[0])
         if idx_i == idx_j:
@@ -140,45 +143,54 @@ def mask_test_edges(adj,num_val=None, num_test=None):
     # NOTE: these edge lists only contain single direction of edge!
     return adj_train, train_edges, np.array(train_edges_false), val_edges, np.array(val_edges_false), test_edges, np.array(test_edges_false)
 
-def gen_crossval_edges(adj):
+def gen_crossval_edges(adj, crossval):
     adj_train, train_edges, train_edges_false, val_edges, val_edges_false = ([] for i in range(5))
-    num_edges = int((adj.todense().sum()-np.diag(adj.todense()).sum())/2)
-    num_test = int(np.floor(num_edges * 0.1)) #10% of edges for test set
-    num_val = int(np.floor(num_edges * 0.05)) #5% of edges for validation set
-    
-    _, _, _, val_train_edges, val_train_edges_false, test_edges, test_edges_false = mask_test_edges(adj, num_val=num_edges-num_test, num_test=num_test)
     crossval_edges = [train_edges, train_edges_false, val_edges, val_edges_false]
-    all_edge_idx = list(range(val_train_edges.shape[0]))
+    num_edges = int((adj.todense().sum()-np.diag(adj.todense()).sum())/2)
+    num_test = int(np.floor(num_edges * 0.01)) #10% of edges for test set
+    num_val = int(np.floor(num_edges * 0.005)) #5% of edges for validation set
 
-    #positive samples
-    np.random.shuffle(all_edge_idx)
-    for i in range(int((num_edges-num_test)/num_val)):
-        val_edges_idx = all_edge_idx[i*num_val:(i+1)*num_val]
-        val_edges_cv = val_train_edges[val_edges_idx]
-        train_edges_cv = np.delete(val_train_edges, val_edges_idx, axis=0)
-        data = np.ones(train_edges_cv.shape[0])
-        adj_train_cv = sp.csr_matrix((data, (train_edges_cv[:, 0], train_edges_cv[:, 1])), shape=adj.shape)
-        adj_train_cv = adj_train_cv + adj_train_cv.T
+    if crossval:
+        _, _, _, val_train_edges, val_train_edges_false, test_edges, test_edges_false = mask_test_edges(adj, num_val=num_edges-num_test, num_test=num_test)
+        all_edge_idx = list(range(val_train_edges.shape[0]))
+
+        #positive samples
+        np.random.shuffle(all_edge_idx)
+        for i in range(int((num_edges-num_test)/num_val)):
+            val_edges_idx = all_edge_idx[i*num_val:(i+1)*num_val]
+            val_edges_cv = val_train_edges[val_edges_idx]
+            train_edges_cv = np.delete(val_train_edges, val_edges_idx, axis=0)
+            data = np.ones(train_edges_cv.shape[0])
+            adj_train_cv = sp.csr_matrix((data, (train_edges_cv[:, 0], train_edges_cv[:, 1])), shape=adj.shape)
+            adj_train_cv = adj_train_cv + adj_train_cv.T
+            
+            adj_train.append(adj_train_cv)
+            train_edges.append(train_edges_cv)
+            val_edges.append(val_edges_cv)
         
-        adj_train.append(adj_train_cv)
-        train_edges.append(train_edges_cv)
-        val_edges.append(val_edges_cv)
-        
-    #negative samples
-    np.random.shuffle(all_edge_idx)
-    for i in range(int((num_edges-num_test)/num_val)):
-        val_edges_false_idx = all_edge_idx[i*num_val:(i+1)*num_val]
-        val_edges_false_cv = val_train_edges_false[val_edges_false_idx]
-        train_edges_false_cv = np.delete(val_train_edges_false, val_edges_false_idx, axis=0)
+        #negative samples
+        np.random.shuffle(all_edge_idx)
+        for i in range(int((num_edges-num_test)/num_val)):
+            val_edges_false_idx = all_edge_idx[i*num_val:(i+1)*num_val]
+            val_edges_false_cv = val_train_edges_false[val_edges_false_idx]
+            train_edges_false_cv = np.delete(val_train_edges_false, val_edges_false_idx, axis=0)
 
-        train_edges_false.append(train_edges_false_cv)
-        val_edges_false.append(val_edges_false_cv)
-
+            train_edges_false.append(train_edges_false_cv)
+            val_edges_false.append(val_edges_false_cv)
+            
+    else:
+        adj_t, train_e, train_e_false, val_e, val_e_false, test_edges, test_edges_false = mask_test_edges(adj, num_val=num_val, num_test=num_test)
+        adj_train.append(adj_t)
+        for x, l in zip([train_e, train_e_false, val_e, val_e_false], crossval_edges):
+            l.append(x)
+            
     print("\n++++++++++++++++++++++++++++++++++++++++++++++++++++")   
     print("# edges in original graph: " + str(num_edges))
-    print("# edges used for training: " + str(train_edges[0].shape[0]))
-    print("# edges used for validation: " + str(val_edges[0].shape[0]))
-    print("# edges used for test: " + str(test_edges.shape[0]))
+    print("# pos edges used for training: " + str(train_edges[0].shape[0]))
+    print("# pos edges used for validation: " + str(val_edges[0].shape[0]))
+    print("# neg edges used for validation: " + str(val_edges_false[0].shape[0]))
+    print("# pos edges used for test: " + str(test_edges.shape[0]))
+    print("# neg edges used for test: " + str(test_edges_false.shape[0]))
     print("# nr of cv sets: " + str(len(adj_train)))
     print("++++++++++++++++++++++++++++++++++++++++++++++++++++\n") 
     

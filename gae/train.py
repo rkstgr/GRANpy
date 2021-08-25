@@ -3,7 +3,7 @@ import numpy as np
 import time
 import scipy.sparse as sp
 
-from sklearn.metrics import roc_auc_score, average_precision_score, roc_curve, precision_recall_curve
+from sklearn.metrics import roc_auc_score, average_precision_score, roc_curve, precision_recall_curve, auc
 
 from preprocessing import construct_feed_dict
 from outputs import viz_train_val_data, viz_roc_pr_curve, max_gmean_thresh
@@ -98,8 +98,8 @@ def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dic
         else:
             train_kl = 0
 
-        _, total_train_acc, train_loss, train_acc, train_ap, train_roc, train_rc_p99, opt_thresh = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
-        _, _, val_loss, val_acc, val_ap, val_roc, val_rc_p99, _ = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp, thresh=opt_thresh)
+        _, total_train_acc, train_loss, train_acc, train_ap, train_roc, train_rp, opt_thresh = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
+        _, _, val_loss, val_acc, val_ap, val_roc, val_rp, _ = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp, thresh=opt_thresh)
         
         scores = [train_loss, train_kl, train_acc, train_ap, train_roc, val_loss, val_acc, val_ap, val_roc]
         for x, l in zip(scores, hist_scores):
@@ -117,7 +117,7 @@ def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dic
               #"train_ap=", "{:.5f}".format(train_ap), "train_roc=", "{:.5f}".format(train_roc),
               "val_acc=", "{:.5f}".format(val_acc),
               "val_ap=", "{:.5f}".format(val_ap),
-              "val_rc_p99=", "{:.5f}".format(val_rc_p99),
+              "val_rp=", "{:.5f}".format(val_rp),
               "val_roc=", "{:.5f}".format(val_roc))
         
         if epoch > FLAGS.early_stopping and loss_val[-1] > np.mean(loss_val[-(FLAGS.early_stopping+1):-1]):
@@ -166,9 +166,8 @@ def get_scores(adj_rec, adj_orig, edges_pos, edges_neg, model_timestamp, viz_roc
     labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds_neg))])
     roc_score = roc_auc_score(labels_all, preds_all)
     ap_score = average_precision_score(labels_all, preds_all)
-    precision, recall, thresholds = precision_recall_curve(labels_all, preds_all)
-    p99_index = [i for i,p in enumerate(precision) if p<0.99][-1]
-    recall_p99 = recall[p99_index]
+    precision, recall, _ = precision_recall_curve(labels_all, preds_all)
+    rp_auc = auc(recall, precision)
 
     if viz_roc:
         viz_roc_pr_curve(preds_all, labels_all, model_timestamp)
@@ -194,7 +193,7 @@ def get_scores(adj_rec, adj_orig, edges_pos, edges_neg, model_timestamp, viz_roc
     accuracy = np.mean(correct_prediction[test_mask==1])
     cost = np.mean(weighted_cross_entropy_with_logits(adj_curr[test_mask==1], adj_rec[test_mask==1], 1))
     
-    return cost_total, accuracy_total, cost, accuracy, roc_score, ap_score, recall_p95, thresh
+    return cost_total, accuracy_total, cost, accuracy, ap_score, roc_score, rp_auc, thresh
 
 def weighted_cross_entropy_with_logits(label, pred, pos_weight):
     return ((1 - label) * pred + (1 + (pos_weight - 1) * label) * (np.log(1 + np.exp(-abs(pred))) + np.maximum(-pred, 0)))
