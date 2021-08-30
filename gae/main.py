@@ -30,7 +30,8 @@ flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
 flags.DEFINE_integer('early_stopping', 5, 'Tolerance for early stopping (# of epochs).')
 
 flags.DEFINE_string('model', 'gcn_ae', 'Model string.')
-flags.DEFINE_string('dataset', 'yeast_gasch', 'Dataset string.')
+flags.DEFINE_string('dataset', 'gasch_GSE102475', 'Dataset file name.')
+flags.DEFINE_string('ground_truth', 'yeast_chipunion_KDUnion_intersect', 'Gold standard edges file name.')
 flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
 flags.DEFINE_integer('crossvalidation', 0, 'Whether to use crossvalidation (1) or not (0).')
 
@@ -38,10 +39,10 @@ flags.DEFINE_integer('hp_optimization', 0, 'Whether to start the hyperparameter 
 
 model_str = FLAGS.model
 dataset_str = FLAGS.dataset
-model_timestamp = time.strftime("%Y%m%d_%H%M%S") + '_' + dataset_str
+model_timestamp = time.strftime("%Y%m%d_%H%M%S") + '_' + dataset_str + '_' + FLAGS.ground_truth
 
 # Load data
-adj, features, shuffle_order = load_data(dataset_str, model_timestamp)
+adj, features, gene_names = load_data(dataset_str, FLAGS.ground_truth, model_timestamp)
 
 # Store original adjacency matrix (without diagonal entries) for later
 adj_orig = adj

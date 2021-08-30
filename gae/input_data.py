@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import sys
 import pickle as pkl
 import networkx as nx
@@ -13,22 +14,39 @@ def parse_index_file(filename):
     return index
 
 
-def load_data(dataset, model_timestamp):
+def load_data(dataset, ground_truth, model_timestamp):
     if dataset not in ['cora','citeseer', 'pubmed']:
         #read csv files
-        adj_path = 'data/' + dataset + '_input_adj.csv'
-        features_path = 'data/' + dataset + '_input_features.csv'
-        adj = np.genfromtxt(adj_path, delimiter=';')
-        features = np.genfromtxt(features_path, delimiter=';')
+        #adj_path = 'data/' + dataset + '_input_adj.csv'
+        #features_path = 'data/' + dataset + '_input_features.csv'
+        #adj = np.genfromtxt(adj_path, delimiter=';')
+        #features = np.genfromtxt(features_path, delimiter=';')
+
+        #read input data
+        norm_expression_path = 'data/normalized_expression/' + dataset + '.csv'
+        norm_expression = pd.read_csv(norm_expression_path, sep=',', header=0, index_col=0)
+        #print(norm_expression)
+        
+        gold_standard_path = 'data/gold_standards/' + ground_truth + '.txt'
+        gold_standard = pd.read_csv(gold_standard_path, sep='\t', header=None, index_col=False)
+        #print(gold_standard)
+        
+        adj = pd.DataFrame(0, index=norm_expression.index, columns=norm_expression.index)
+        for index, row in gold_standard.iterrows():
+            if row.iat[0] in norm_expression.index and row.iat[1] in norm_expression.index:
+                adj.at[row.iat[0],row.iat[1]] = 1
+
+        adj = np.array(adj.values)
+        features = np.array(norm_expression.values)
 
         #preprocess matrices
         #(remove isolated nodes, scale features 0-1, make graph undirected, remove self edges, shuffle nodes)
+        adj = preprocess_input_adj(adj, sym=True, diag=0)
         adj, features = crop_isolated_nodes(adj, features)
         adj, features, order = shuffle_nodes(adj, features)
-        #features = preprocessing.StandardScaler().fit_transform(features)
-        features= preprocessing.MinMaxScaler().fit_transform(features)
-        adj = preprocess_input_adj(adj, sym=True, diag=0)
-
+        features = preprocessing.StandardScaler().fit_transform(features)
+        #features= preprocessing.MinMaxScaler().fit_transform(features)
+        
         adj = sp.csr_matrix(adj)
         features = sp.csr_matrix(features)
         print("shape of adj matrix: " + str(adj.shape))
@@ -65,7 +83,7 @@ def load_data(dataset, model_timestamp):
     np.savetxt('data/' + dataset + '_adj' + '.csv', adj.toarray(), delimiter=";")
     np.savetxt('data/' + dataset + '_features' + '.csv', features.toarray(), delimiter=";")
 
-    return adj, features, np.arrange(adj.shape[0])
+    return adj, features, None
 
 def crop_isolated_nodes(adj_orig, feat_orig):
     adj_cropped = adj_orig
@@ -73,9 +91,9 @@ def crop_isolated_nodes(adj_orig, feat_orig):
     
     node_degrees = np.sum(adj_orig, axis=0) + np.sum(adj_orig, axis=1)
     isolated_nodes = [i for i,d in enumerate(node_degrees) if d==0]
-    np.delete(adj_cropped, isolated_nodes, axis=0)
-    np.delete(adj_cropped, isolated_nodes, axis=1)
-    np.delete(feat_cropped, isolated_nodes, axis=0)
+    adj_cropped = np.delete(adj_cropped, isolated_nodes, axis=0)
+    adj_cropped = np.delete(adj_cropped, isolated_nodes, axis=1)
+    feat_cropped = np.delete(feat_cropped, isolated_nodes, axis=0)
     
     return (adj_cropped, feat_cropped)
 
@@ -94,7 +112,7 @@ def preprocess_input_adj(adj_orig, sym, diag):
         adj_sym[adj_sym > 1] = 1
     else:
         adj_sym = adj_orig
-    if diag is not None:    
+    if diag is not None:
         np.fill_diagonal(adj_sym, diag)
     
     return adj_sym
