@@ -11,7 +11,6 @@ from outputs import viz_train_val_data, viz_roc_pr_curve, max_gmean_thresh
 def train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_edges, placeholders, opt, model, model_str, model_timestamp, adj, test_edges, test_edges_false):
     acc_cv, ap_cv, roc_cv, acc_init_cv, ap_init_cv, roc_init_cv = ([] for i in range(6))
 
-    sess = tf.compat.v1.Session()
     feed_dict = None
     iterations = 1 + FLAGS.crossvalidation * (len(adj) - 1)
 
@@ -22,19 +21,19 @@ def train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_ed
         feed_dict.update({placeholders['dropout']: FLAGS.dropout})
         # Train model
         acc_last, ap_last, roc_last, acc_init, ap_init, roc_init, opt_thresh = train_model(adj_orig, FLAGS, [x[cv_set] for x in crossval_edges],
-                                            placeholders, opt, sess, model, feed_dict, model_str, model_timestamp)
+                                            placeholders, opt, model, feed_dict, model_str, model_timestamp)
         for x,l in zip([acc_last, ap_last, roc_last, acc_init, ap_init, roc_init], [acc_cv, ap_cv, roc_cv, acc_init_cv, ap_init_cv, roc_init_cv]):
             l.append(x)
 
     #Save last predicted adj matrix
-    adj_pred = predict_adj(feed_dict, sess, model, model_timestamp, placeholders, save_adj=True)
+    #adj_pred = predict_adj(feed_dict, sess, model, model_timestamp, placeholders, save_adj=True)
 
     #Resulting ROC curve
     viz_roc = True
-    _, _, test_loss, test_acc, test_ap, test_roc, _, _ = get_scores(adj_pred, adj_orig, test_edges, test_edges_false, model_timestamp, viz_roc=viz_roc, thresh=opt_thresh)
+    #_, _, test_loss, test_acc, test_ap, test_roc, _, _ = get_scores(adj_pred, adj_orig, test_edges, test_edges_false, model_timestamp, viz_roc=viz_roc, thresh=opt_thresh)
     #Random ROC curve
     viz_random_roc = False
-    _, _, _, random_acc, random_ap, random_roc, _, _ = get_scores(np.array(adj[0].todense()), adj_orig, test_edges, test_edges_false, (model_timestamp + "_random"), viz_roc=viz_random_roc, random=True)
+    #_, _, _, random_acc, random_ap, random_roc, _, _ = get_scores(np.array(adj[0].todense()), adj_orig, test_edges, test_edges_false, (model_timestamp + "_random"), viz_roc=viz_random_roc, random=True)
 
     if FLAGS.crossvalidation:
         cv_str = str(iterations) + " fold CV "
@@ -45,9 +44,9 @@ def train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_ed
     print(cv_str + "Average Precision: " + str(np.round(np.mean(ap_cv), 2)) + " with SD: " + str(np.round(np.std(ap_cv),2)))
     print(cv_str + "Accuracy: " + str(np.round(np.mean(acc_cv), 2)) + " with SD: " + str(np.round(np.std(acc_cv),2)))
 
-    print('\nTest ROC score: ' + str(np.round(test_roc,2)))
-    print('Test AP score: ' + str(np.round(test_ap,2)))
-    print('Test accuracy (threshold= ' + str(opt_thresh) + "): "  + str(np.round(test_acc,2)))
+    #print('\nTest ROC score: ' + str(np.round(test_roc,2)))
+    #print('Test AP score: ' + str(np.round(test_ap,2)))
+    #print('Test accuracy (threshold= ' + str(opt_thresh) + "): "  + str(np.round(test_acc,2)))
 
     #print('\nRandom Control ROC score: ' + str(np.round(random_roc,2)))
     #print('Random Control AP score: ' + str(np.round(random_ap,2)))
@@ -59,8 +58,9 @@ def train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_ed
 
     return np.mean(acc_cv), np.mean(ap_cv), np.mean(roc_cv)
 
-def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dict, model_str, model_timestamp):
+def train_model(adj_orig, FLAGS, edges, placeholders, opt, model, feed_dict, model_str, model_timestamp):
     # Initialize session
+    sess = tf.compat.v1.Session()
     sess.run(tf.compat.v1.global_variables_initializer())
     
     loss_train, kl_train, acc_train, ap_train, roc_train, loss_val, acc_val, ap_val, roc_val = ([] for i in range(9))
@@ -125,6 +125,7 @@ def train_model(adj_orig, FLAGS, edges, placeholders, opt, sess, model, feed_dic
             break
 
     print("Optimization Finished!")
+    sess.close()
 
     # Plot training & validation metrics
     viz_train_val_data(hist_scores, model_str, model_timestamp)

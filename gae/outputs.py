@@ -1,6 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, precision_recall_curve, auc
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 
 def viz_train_val_data(hist_scores, model_str, model_timestamp):
     # Plot training & validation metrics

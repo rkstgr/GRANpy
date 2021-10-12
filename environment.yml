@@ -1,0 +1,11 @@
+name: gae
+channels:
+  - defaults
+dependencies:
+  - python=2.7
+  - scikit-learn
+  - networkx
+  - tensorflow=1.14
+  - matplotlib
+  - pandas
+prefix: /Users/marco.stock/opt/anaconda3/envs/gae
