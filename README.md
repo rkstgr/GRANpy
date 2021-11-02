@@ -1,4 +1,4 @@
-Graph Auto-Encoders (GAE) for Gene Regulatory Network (GRN) completion using scRNA-Seq datasets
+Graph Regulatory Autoencoder Network in python (GRANpy) for Gene Regulatory Network completion using scRNA-Seq datasets
 ============ 
 
 ## Requirements
@@ -26,22 +26,22 @@ In order to use your own data, you have to provide
 Have a look at the `load_data()` function in `input_data.py` for an example.
 
 ### --learning_rate
-> Default: 0.00005
+> Default: 0.00001
 
 Initial learning rate.
 
 ### --epochs
-> Default: 200
+> Default: 1000
 
 Number of epochs to train.
 
 ### --hidden1
-> Default: 12
+> Default: 64
 
 Number of units in hidden layer 1.
 
 ### --hidden2
-> Default: 10
+> Default: 48
 
 Number of units in hidden layer 2.
 
@@ -95,8 +95,6 @@ Whether to start the hyperparameter optimization run (1) or not (0).
 T. N. Kipf, M. Welling, [Variational Graph Auto-Encoders](https://arxiv.org/abs/1611.07308), NIPS Workshop on Bayesian Deep Learning (2016)
 
 Graph Auto-Encoders (GAEs) are end-to-end trainable neural network models for unsupervised learning, clustering and link prediction on graphs. 
-
-![(Variational) Graph Auto-Encoder](figure.png)
 
 GAEs have successfully been used for:
 * Link prediction in large-scale relational data: M. Schlichtkrull & T. N. Kipf et al., [Modeling Relational Data with Graph Convolutional Networks](https://arxiv.org/abs/1703.06103) (2017),
