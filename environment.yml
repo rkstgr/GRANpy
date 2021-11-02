@@ -1,4 +1,4 @@
-name: GRANNy
+name: GRANpy
 channels:
   - defaults
 dependencies:
