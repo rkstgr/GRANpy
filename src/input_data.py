@@ -1,8 +1,5 @@
 import numpy as np
 import pandas as pd
-import sys
-import pickle as pkl
-import networkx as nx
 import scipy.sparse as sp
 from sklearn import preprocessing
 
