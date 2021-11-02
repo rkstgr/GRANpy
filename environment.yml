@@ -1,4 +1,4 @@
-name: gae
+name: GRANNy
 channels:
   - defaults
 dependencies:

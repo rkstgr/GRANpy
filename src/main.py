@@ -3,6 +3,7 @@ from __future__ import print_function
 
 import time
 import os
+import warnings
 
 # Train on CPU (hide GPU) due to memory constraints
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
@@ -17,40 +18,59 @@ from input_data import load_data
 from model import GCNModelAE, GCNModelVAE
 from preprocessing import preprocess_graph, sparse_to_tuple, gen_train_val_test_sets
 from train import train_test_model
+from outputs import save_adj
 
 # Settings
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_float('learning_rate', 0.00005, 'Initial learning rate.')
-flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
-flags.DEFINE_integer('hidden1', 12, 'Number of units in hidden layer 1.')
-flags.DEFINE_integer('hidden2', 10, 'Number of units in hidden layer 2.')
+flags.DEFINE_integer('verbose', 1, 'Verbosity of output from low (0) to high (1)')
+
+flags.DEFINE_float('learning_rate', 0.00001, 'Initial learning rate.')
+flags.DEFINE_integer('epochs', 1000, 'Number of max epochs to train.')
+flags.DEFINE_integer('hidden1', 64, 'Number of units in hidden layer 1.')
+flags.DEFINE_integer('hidden2', 48, 'Number of units in hidden layer 2.')
 flags.DEFINE_float('weight_decay', 0., 'Weight for L2 loss on embedding matrix.')
 flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
 flags.DEFINE_integer('early_stopping', 5, 'Tolerance for early stopping (# of epochs).')
 
 flags.DEFINE_string('model', 'gcn_ae', 'Model string.')
+flags.DEFINE_float('ratio_val', 0.2, 'Ratio of edges used for validation metrics.')
+flags.DEFINE_float('ratio_test', 0.1, 'Ratio of edges used for test metrics.')
+flags.DEFINE_integer('balanced_metrics', 1, 'Whether to use balanced metrics (1) or not (0).')
+
 flags.DEFINE_string('dataset', 'gasch_GSE102475', 'Dataset file name.')
 flags.DEFINE_string('ground_truth', 'yeast_chipunion_KDUnion_intersect', 'Gold standard edges file name.')
-flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
-flags.DEFINE_integer('crossvalidation', 0, 'Whether to use crossvalidation (1) or not (0).')
-flags.DEFINE_integer('balanced_metrics', 0, 'Whether to use balanced metrics (1) or not (0).')
+flags.DEFINE_string('inFilePath', None, 'Input Files path')
+flags.DEFINE_string('outFilePath', None, 'Output Files path')
 
+flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
+flags.DEFINE_integer('random_prior', 0, 'When prior adjacency matrix should be set to random matrix (1) or not (0).')
+
+flags.DEFINE_integer('crossvalidation', 0, 'Whether to use crossvalidation (1) or not (0).')
 flags.DEFINE_integer('hp_optimization', 0, 'Whether to start the hyperparameter optimization run (1) or not (0).')
 
 model_str = FLAGS.model
-dataset_str = FLAGS.dataset
-model_timestamp = time.strftime("%Y%m%d_%H%M%S") + '_' + dataset_str + '_' + FLAGS.ground_truth
+model_timestamp = time.strftime("%Y%m%d_%H%M%S") + '_' + FLAGS.dataset + '_' + FLAGS.ground_truth
+
+if FLAGS.verbose == 0:
+    warnings.filterwarnings("ignore")
 
 # Load data
-adj, features, gene_names = load_data(dataset_str, FLAGS.ground_truth, model_timestamp)
+if FLAGS.inFilePath is None:
+    norm_expression_path = 'data/normalized_expression/' + FLAGS.dataset + '.csv'
+    gold_standard_path = 'data/gold_standards/' + FLAGS.ground_truth + '.txt'
+else:
+    norm_expression_path = FLAGS.inFilePath + 'ExpressionData' + '.csv'
+    gold_standard_path = FLAGS.inFilePath + 'PriorNetwork' + '.txt'
+
+adj, features, gene_names = load_data(norm_expression_path, gold_standard_path, model_timestamp, FLAGS.random_prior)
 
 # Store original adjacency matrix (without diagonal entries) for later
 adj_orig = adj
 adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
 adj_orig.eliminate_zeros()
 
-adj_train, crossval_edges, test_edges, test_edges_false = gen_train_val_test_sets(adj_orig, FLAGS.crossvalidation, FLAGS.balanced_metrics)
+adj_train, crossval_edges, test_edges, test_edges_false = gen_train_val_test_sets(adj_orig, FLAGS.crossvalidation, FLAGS.balanced_metrics, FLAGS.ratio_val, FLAGS.ratio_test)
 adj = adj_train
 
 if FLAGS.features == 0:
@@ -60,7 +80,7 @@ if FLAGS.features == 0:
 adj_norm = [preprocess_graph(m) for m in adj]
 
 adj_label = [(m + sp.eye(m.shape[0])) for m in adj_train]
-np.savetxt('logs/outputs/' + model_timestamp + '_adj_train.csv', adj_label[-1].toarray(), delimiter=";")
+#np.savetxt('logs/outputs/' + model_timestamp + '_adj_train.csv', adj_label[-1].toarray(), delimiter=";")
 adj_label = [sparse_to_tuple(m) for m in adj_label]
 
 features = sparse_to_tuple(features.tocoo())
@@ -108,6 +128,7 @@ def build_tf_graph(model_str, features, adj):
 
 
 #Build, train and test model
+adj_pred = None
 if FLAGS.hp_optimization:
     #Hyperparameter Optimization
     HP_NUM_UNITS1 = hp.HParam('num_units1', hp.Discrete([2, 5, 8, 12, 16, 32, 64, 128]))
@@ -133,15 +154,22 @@ if FLAGS.hp_optimization:
             
             tf.compat.v1.reset_default_graph()
             placeholders, model, opt = build_tf_graph(model_str, features, adj)
-            acc, ap, roc = train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_edges,
+            acc, ap, roc, adj_pred = train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_edges,
                                             placeholders, opt, model, model_str, (model_timestamp + '_' + run_name),
                                             adj, test_edges, test_edges_false)
             session_num += 1
+
+            #Save output adj matrix and gene interaction list    
+            save_adj(adj_pred, FLAGS.outFilePath, model_timestamp, gene_names)
       
 else:
     #Run model with given hyperparameters
     placeholders, model, opt = build_tf_graph(model_str, features, adj)
     model_timestamp = model_timestamp + "_" + model_str + "_hid1-" + str(FLAGS.hidden1) + "_hid2-" + str(FLAGS.hidden2) + "_lr-" + str(FLAGS.learning_rate)
-    _, _, _ = train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_edges,
+    _, _, _, adj_pred = train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_edges,
                                placeholders, opt, model, model_str, model_timestamp,
                                adj, test_edges, test_edges_false)
+    
+    #Save output adj matrix and gene interaction list    
+    save_adj(adj_pred, FLAGS.outFilePath, model_timestamp, gene_names)
+    
