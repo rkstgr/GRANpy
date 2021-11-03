@@ -55,6 +55,11 @@ model_timestamp = time.strftime("%Y%m%d_%H%M%S") + '_' + FLAGS.dataset + '_' + F
 if FLAGS.verbose == 0:
     warnings.filterwarnings("ignore")
 
+if not os.path.exists('logs/outputs'):
+    os.mkdir('logs/outputs')
+if not os.path.exists('logs/training_plots'):
+    os.mkdir('logs/training_plots')
+
 # Load data
 if FLAGS.inFilePath is None:
     norm_expression_path = 'data/normalized_expression/' + FLAGS.dataset + '.csv'
@@ -130,6 +135,9 @@ def build_tf_graph(model_str, features, adj):
 #Build, train and test model
 adj_pred = None
 if FLAGS.hp_optimization:
+    if not os.path.exists('logs/hparam_tuning'):
+        os.mkdir('logs/hparam_tuning')
+        
     #Hyperparameter Optimization
     HP_NUM_UNITS1 = hp.HParam('num_units1', hp.Discrete([2, 5, 8, 12, 16, 32, 64, 128]))
     HP_RATIO_UNITS2 = hp.HParam('ratio_units2', hp.Discrete([0.1, 0.25, 0.4, 0.65, 0.8]))
