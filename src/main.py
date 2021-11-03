@@ -55,6 +55,8 @@ model_timestamp = time.strftime("%Y%m%d_%H%M%S") + '_' + FLAGS.dataset + '_' + F
 if FLAGS.verbose == 0:
     warnings.filterwarnings("ignore")
 
+if not os.path.exists('logs'):
+    os.mkdir('logs')
 if not os.path.exists('logs/outputs'):
     os.mkdir('logs/outputs')
 if not os.path.exists('logs/training_plots'):
