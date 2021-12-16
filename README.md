@@ -1,6 +1,20 @@
 Graph Regulatory Autoencoder Network in python (GRANpy) for Gene Regulatory Network completion using scRNA-Seq datasets
 ============ 
 
+# Installation
+
+## Conda
+
+The environment required can be installed via conda with the environment.yml file available in this repository:
+
+`conda env create -f environment.yml`
+
+## Docker
+
+Alternatively, a docker image is available on docker hub that includes all requirements:
+
+https://hub.docker.com/repository/docker/marcostock/granpy/
+
 ## Requirements
 * TensorFlow (1.0 or later) with TensorBoard -- tested with tf1.14.0
 * python 2.7
@@ -10,20 +24,50 @@ Graph Regulatory Autoencoder Network in python (GRANpy) for Gene Regulatory Netw
 
 ## Run the demo (Yeast scRNA-Seq dataset)
 
-```bash
-python main.py
-```
+After activating the conda GRANpy environment with:
 
-## Options
+`conda activate GRANpy`
+
+the main algorithm with a yeast scRNA-Seq sample dataset can be started with:
+
+`python main.py`
+
+# Options
+
+## Input data
 
 ### --dataset
-> Default: yeast_gasch
+> Default: gasch_GSE102475
 
 In order to use your own data, you have to provide 
 * an N by N adjacency matrix (N is the number of nodes), and
 * an N by D feature matrix (D is the number of features per node) -- optional
 
-Have a look at the `load_data()` function in `input_data.py` for an example.
+Have a look at the `load_data()` function in `input_data.py`.
+
+### --ground_truth
+> Default: yeast_chipunion_KDUnion_intersect
+
+Gold standard edges file name.
+
+## Training
+
+### --model
+> Default: gcn_ae
+
+You can choose between the following models: 
+* `gcn_ae`: Graph Auto-Encoder (with GCN encoder)
+* `gcn_vae`: Variational Graph Auto-Encoder (with GCN encoder)
+
+### --features
+> Default: 1
+
+Whether to use features (1) or not (0).
+
+### --random_prior
+> Default: 0
+
+Wether prior adjacency matrix should be set to random matrix (1) or not (0).
 
 ### --learning_rate
 > Default: 0.00001
@@ -60,17 +104,41 @@ Dropout rate (1 - keep probability).
 
 Tolerance for early stopping (# of epochs).
 
-### --model
-> Default: gcn_ae
+## Evaluation
 
-You can choose between the following models: 
-* `gcn_ae`: Graph Auto-Encoder (with GCN encoder)
-* `gcn_vae`: Variational Graph Auto-Encoder (with GCN encoder)
+### --ratio_val
+> Default: 0.2
 
-### --features
+Ratio of edges used for validation metrics.
+
+### --ratio_test
+> Default: 0.1
+
+Ratio of edges used for test metrics.
+
+### --balanced_metrics
+> Default: 1
+> 
+Whether to use balanced metrics (1) or not (0).
+
+## BEEline
+
+### --inFilePath
+> Default: None
+
+Input Files path.
+
+### --outFilePath
+> Default: None
+
+Output Files path.
+
+## Others
+
+### --verbose
 > Default: 1
 
-Whether to use features (1) or not (0).
+Verbosity of output from low (0) to high (1)
 
 ### --crossvalidation
 > Default: 0
@@ -81,6 +149,8 @@ Whether to use crossvalidation (1) or not (0).
 > Default: 0
 
 Whether to start the hyperparameter optimization run (1) or not (0).
+
+
 
 ## Original paper by Kipf et. al. 2016 (Graph Auto-Encoders)
 
