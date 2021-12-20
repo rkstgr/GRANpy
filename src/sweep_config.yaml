@@ -1,0 +1,45 @@
+project: granpy
+program: wandb_train.py
+method: random
+metric:
+  name: "val/roc"
+  goal: maximize
+parameters:
+  # fixed
+  epochs:
+    value: 500
+  ratio_val:
+    value: 0.2
+  ratio_test:
+    value: 0.1
+  balanced_metrics:
+    value: 1
+  dataset:
+    value: "gasch_GSE102475"
+  ground_truth:
+    value: "yeast_chipunion_KDUnion_intersect"
+  model:
+    value: "gcn_ae"
+  features:
+    value: 1
+  early_stopping:
+    value: 10
+
+  # actual hyperparameters
+  learning_rate:
+    distribution: log_uniform
+    max: -4.6 #1e-2
+    min: -13.815 #1e-6
+  hidden1:
+    distribution: categorical
+    values: [ 16, 32, 48, 64, 128, 256 ]
+  hidden2:
+    distribution: categorical
+    values: [ 16, 24, 32, 48, 64, 128 ]
+  weight_decay:
+    value: 0
+  dropout:
+    distribution: uniform
+    min: 0
+    max: 0.5
+
