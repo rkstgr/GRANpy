@@ -32,10 +32,10 @@ parameters:
     min: -13.815 #1e-6
   hidden1:
     distribution: categorical
-    values: [ 16, 32, 48, 64, 128, 256 ]
+    values: [ 16, 32, 48, 64, 128, 256, 512 ]
   hidden2:
     distribution: categorical
-    values: [ 16, 24, 32, 48, 64, 128 ]
+    values: [ 16, 24, 32, 48, 64, 128, 256 ]
   weight_decay:
     value: 0
   dropout:
