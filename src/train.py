@@ -60,9 +60,24 @@ def train_model(adj_orig, FLAGS, edges, placeholders, opt, model, feed_dict, mod
     #initial metrics
     train_edges, train_edges_false, val_edges, val_edges_false = edges
     adj_pred = predict_adj(feed_dict, sess, model, model_timestamp, placeholders)
-    _, _, train_loss, train_acc, train_ap, train_roc, _, opt_thresh = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
-    _, _, val_loss, val_acc, val_ap, val_roc, _, _ = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp, thresh=opt_thresh)
+    _, _, train_loss, train_acc, train_ap, train_roc, train_rp, opt_thresh = get_scores(adj_pred, adj_orig, train_edges, train_edges_false, model_timestamp)
+    _, _, val_loss, val_acc, val_ap, val_roc, val_rp, _ = get_scores(adj_pred, adj_orig, val_edges, val_edges_false, model_timestamp, thresh=opt_thresh)
     train_kl = None
+
+    print("Epoch:", 'Init',
+              #"time=", "{:.5f}".format(time.time() - t),
+              "train_loss=", "{:.5f}".format(train_loss),
+              #"train_loss_control=", "{:.5f}".format(ctrl_cost),
+              #"recon loss=", "{:.5f}".format(train_loss-train_kl), "kl_loss=", "{:.5f}".format(train_kl),
+              "val_loss=", "{:.5f}".format(val_loss), 
+              #"train_acc_control=", "{:.5f}".format(ctrl_accuracy),
+              #"total_train_acc=", "{:.5f}".format(total_train_acc),
+              "train_acc=", "{:.5f}".format(train_acc),
+              #"train_ap=", "{:.5f}".format(train_ap), "train_roc=", "{:.5f}".format(train_roc),
+              "val_acc=", "{:.5f}".format(val_acc),
+              "val_ap=", "{:.5f}".format(val_ap),
+              "val_rp=", "{:.5f}".format(val_rp),
+              "val_roc=", "{:.5f}".format(val_roc))
 
     scores = [train_loss, train_kl, train_acc, train_ap, train_roc, val_loss, val_acc, val_ap, val_roc]    
     for x, l in zip(scores, hist_scores):
@@ -142,7 +157,7 @@ def predict_adj(feed_dict, sess, model, model_timestamp, placeholders, emb=None)
 
     return adj_rec
 
-def get_scores(adj_rec, adj_orig, edges_pos, edges_neg, model_timestamp, viz_roc=False, random=False, thresh=None):
+def get_scores(adj_rec, adj_orig, edges_pos, edges_neg, model_timestamp, viz_roc=True, random=False, thresh=None):
 
     if random:
         adj_rec = random_adj(adj_rec, (adj_orig.sum()-adj_rec.sum())/2, mode="random_normal")
@@ -151,16 +166,19 @@ def get_scores(adj_rec, adj_orig, edges_pos, edges_neg, model_timestamp, viz_roc
     pos = []
     for e in edges_pos:
         preds.append(sigmoid(adj_rec[e[0], e[1]]))
-        pos.append(adj_orig[e[0], e[1]])
+        pos.append(1)
 
     preds_neg = []
     neg = []
     for e in edges_neg:
         preds_neg.append(sigmoid(adj_rec[e[0], e[1]]))
-        neg.append(adj_orig[e[0], e[1]])
+        neg.append(0)
+        
 
-    preds_all = np.hstack([preds, preds_neg])
-    labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds_neg))])
+    #preds_all = np.hstack([preds, preds_neg])
+    preds_all = np.concatenate([preds, preds_neg])
+    #labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds_neg))])
+    labels_all = np.concatenate([np.ones(len(preds)), np.zeros(len(preds_neg))])
     roc_score = roc_auc_score(labels_all, preds_all)
     ap_score = average_precision_score(labels_all, preds_all)
     precision, recall, _ = precision_recall_curve(labels_all, preds_all)

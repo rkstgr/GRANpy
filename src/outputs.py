@@ -95,7 +95,7 @@ def max_gmean_thresh(fpr, tpr, thresholds):
     fprOpt = np.round(fpr[index], 2)
     tprOpt = np.round(tpr[index], 2)
     
-    return thresholdOpt, gmeanOpt, fprOpt, tprOpt
+    return thresholds[index], gmeanOpt, fprOpt, tprOpt
 
 def save_adj(adj, outPath, model_timestamp, gene_names):
     if outPath is None:

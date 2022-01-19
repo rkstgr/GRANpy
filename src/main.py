@@ -81,6 +81,7 @@ adj_train, crossval_edges, test_edges, test_edges_false = gen_train_val_test_set
 adj = adj_train
 
 if FLAGS.features == 0:
+    print("Running without features")
     features = sp.identity(features.shape[0])  # featureless
 
 # Some preprocessing
