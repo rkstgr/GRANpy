@@ -77,7 +77,9 @@ adj_orig = adj
 adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
 adj_orig.eliminate_zeros()
 
-adj_train, crossval_edges, test_edges, test_edges_false = gen_train_val_test_sets(adj_orig, FLAGS.crossvalidation, FLAGS.balanced_metrics, FLAGS.ratio_val, FLAGS.ratio_test)
+adj_train, crossval_edges, test_edges, test_edges_false = gen_train_val_test_sets(adj_orig, FLAGS.crossvalidation,
+                                                                                  FLAGS.balanced_metrics,
+                                                                                  FLAGS.ratio_val, FLAGS.ratio_test)
 adj = adj_train
 
 if FLAGS.features == 0:
@@ -87,10 +89,11 @@ if FLAGS.features == 0:
 adj_norm = [preprocess_graph(m) for m in adj]
 
 adj_label = [(m + sp.eye(m.shape[0])) for m in adj_train]
-#np.savetxt('logs/outputs/' + model_timestamp + '_adj_train.csv', adj_label[-1].toarray(), delimiter=";")
+# np.savetxt('logs/outputs/' + model_timestamp + '_adj_train.csv', adj_label[-1].toarray(), delimiter=";")
 adj_label = [sparse_to_tuple(m) for m in adj_label]
 
 features = sparse_to_tuple(features.tocoo())
+
 
 def build_tf_graph(model_str, features, adj):
     # Define placeholders
@@ -120,13 +123,13 @@ def build_tf_graph(model_str, features, adj):
         if model_str == 'gcn_ae':
             opt = OptimizerAE(preds=model.reconstructions,
                               labels=tf.reshape(tf.sparse.to_dense(placeholders['adj_orig'],
-                                                                          validate_indices=False), [-1]),
+                                                                   validate_indices=False), [-1]),
                               pos_weight=pos_weight,
                               norm=norm)
         elif model_str == 'gcn_vae':
             opt = OptimizerVAE(preds=model.reconstructions,
                                labels=tf.reshape(tf.sparse.to_dense(placeholders['adj_orig'],
-                                                                           validate_indices=False), [-1]),
+                                                                    validate_indices=False), [-1]),
                                model=model, num_nodes=num_nodes,
                                pos_weight=pos_weight,
                                norm=norm)
@@ -134,13 +137,13 @@ def build_tf_graph(model_str, features, adj):
     return placeholders, model, opt
 
 
-#Build, train and test model
+# Build, train and test model
 adj_pred = None
 if FLAGS.hp_optimization:
     if not os.path.exists('logs/hparam_tuning'):
         os.mkdir('logs/hparam_tuning')
-        
-    #Hyperparameter Optimization
+
+    # Hyperparameter Optimization
     HP_NUM_UNITS1 = hp.HParam('num_units1', hp.Discrete([2, 5, 8, 12, 16, 32, 64, 128]))
     HP_RATIO_UNITS2 = hp.HParam('ratio_units2', hp.Discrete([0.1, 0.25, 0.4, 0.65, 0.8]))
     HP_LR = hp.HParam('lr', hp.Discrete([0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1]))
@@ -148,38 +151,41 @@ if FLAGS.hp_optimization:
     session_num = 0
 
     for num_units1 in HP_NUM_UNITS1.domain.values:
-      for ratio_units2 in HP_RATIO_UNITS2.domain.values:
-        for lr in HP_LR.domain.values:
-            hparams = {
-                HP_NUM_UNITS1: num_units1,
-                HP_RATIO_UNITS2: ratio_units2,
-                HP_LR: lr,
-            }
-            FLAGS.learning_rate = hparams[HP_LR]
-            FLAGS.hidden1 = hparams[HP_NUM_UNITS1]
-            FLAGS.hidden2 = int(np.ceil(hparams[HP_RATIO_UNITS2]*hparams[HP_NUM_UNITS1]))
-            run_name = "run" + str(session_num) + "_" + model_str + "_hid1-" + str(FLAGS.hidden1) + "_hid2-" + str(FLAGS.hidden2) + "_lr-" + str(FLAGS.learning_rate)
-            print('--- Starting trial %d' % session_num)
-            print({h.name: hparams[h] for h in hparams})
-            
-            tf.compat.v1.reset_default_graph()
-            placeholders, model, opt = build_tf_graph(model_str, features, adj)
-            acc, ap, roc, adj_pred = train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_edges,
-                                            placeholders, opt, model, model_str, (model_timestamp + '_' + run_name),
-                                            adj, test_edges, test_edges_false)
-            session_num += 1
+        for ratio_units2 in HP_RATIO_UNITS2.domain.values:
+            for lr in HP_LR.domain.values:
+                hparams = {
+                    HP_NUM_UNITS1: num_units1,
+                    HP_RATIO_UNITS2: ratio_units2,
+                    HP_LR: lr,
+                }
+                FLAGS.learning_rate = hparams[HP_LR]
+                FLAGS.hidden1 = hparams[HP_NUM_UNITS1]
+                FLAGS.hidden2 = int(np.ceil(hparams[HP_RATIO_UNITS2] * hparams[HP_NUM_UNITS1]))
+                run_name = "run" + str(session_num) + "_" + model_str + "_hid1-" + str(FLAGS.hidden1) + "_hid2-" + str(
+                    FLAGS.hidden2) + "_lr-" + str(FLAGS.learning_rate)
+                print('--- Starting trial %d' % session_num)
+                print({h.name: hparams[h] for h in hparams})
 
-            #Save output adj matrix and gene interaction list    
-            save_adj(adj_pred, FLAGS.outFilePath, model_timestamp, gene_names)
-      
+                tf.compat.v1.reset_default_graph()
+                placeholders, model, opt = build_tf_graph(model_str, features, adj)
+                acc, ap, roc, adj_pred = train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS,
+                                                          crossval_edges,
+                                                          placeholders, opt, model, model_str,
+                                                          (model_timestamp + '_' + run_name),
+                                                          adj, test_edges, test_edges_false)
+                session_num += 1
+
+                # Save output adj matrix and gene interaction list
+                save_adj(adj_pred, FLAGS.outFilePath, model_timestamp, gene_names)
+
 else:
-    #Run model with given hyperparameters
+    # Run model with given hyperparameters
     placeholders, model, opt = build_tf_graph(model_str, features, adj)
-    model_timestamp = model_timestamp + "_" + model_str + "_hid1-" + str(FLAGS.hidden1) + "_hid2-" + str(FLAGS.hidden2) + "_lr-" + str(FLAGS.learning_rate)
+    model_timestamp = model_timestamp + "_" + model_str + "_hid1-" + str(FLAGS.hidden1) + "_hid2-" + str(
+        FLAGS.hidden2) + "_lr-" + str(FLAGS.learning_rate)
     _, _, _, adj_pred = train_test_model(adj_norm, adj_label, features, adj_orig, FLAGS, crossval_edges,
-                               placeholders, opt, model, model_str, model_timestamp,
-                               adj, test_edges, test_edges_false)
-    
-    #Save output adj matrix and gene interaction list    
+                                         placeholders, opt, model, model_str, model_timestamp,
+                                         adj, test_edges, test_edges_false)
+
+    # Save output adj matrix and gene interaction list
     save_adj(adj_pred, FLAGS.outFilePath, model_timestamp, gene_names)
-    

@@ -7,7 +7,7 @@ metric:
 parameters:
   # fixed
   epochs:
-    value: 500
+    value: 100
   ratio_val:
     value: 0.2
   ratio_test:
@@ -21,25 +21,22 @@ parameters:
   model:
     value: "gcn_ae"
   features:
-    value: 1
+    value: 0
   early_stopping:
-    value: 10
+    value: 5
 
   # actual hyperparameters
   learning_rate:
-    distribution: log_uniform
-    max: -4.6 #1e-2
-    min: -13.815 #1e-6
+    value: 5.e-4
+#    distribution: log_uniform
+#    max: -4.6 #1e-2
+#    min: -13.815 #1e-6
   hidden1:
-    distribution: categorical
-    values: [ 16, 32, 48, 64, 128, 256, 512 ]
+    value: 64
   hidden2:
-    distribution: categorical
-    values: [ 16, 24, 32, 48, 64, 128, 256 ]
+    value: 48
   weight_decay:
-    value: 0
+    value: 0.0001
   dropout:
-    distribution: uniform
-    min: 0
-    max: 0.5
+    value: 0.05
 

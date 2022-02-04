@@ -1,6 +1,8 @@
 from __future__ import division
 from __future__ import print_function
 
+import json
+import random
 import time
 import os
 import warnings
@@ -11,7 +13,6 @@ import wandb
 os.environ['CUDA_VISIBLE_DEVICES'] = ""
 
 import tensorflow as tf
-from tensorboard.plugins.hparams import api as hp
 import numpy as np
 import scipy.sparse as sp
 
@@ -22,13 +23,33 @@ from preprocessing import preprocess_graph, sparse_to_tuple, gen_train_val_test_
 from train import train_test_model
 from outputs import save_adj
 
+
+def set_seeds(seed):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+
+
+MODEL_SEED = None
+DATA_SEED = None
+
+if MODEL_SEED is not None:
+    set_seeds(MODEL_SEED)
+    tf.compat.v1.reset_default_graph()
+    tf.compat.v1.random.set_random_seed(MODEL_SEED)
+    random.seed()
+    np.random.seed(MODEL_SEED)
+
 # Settings
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_integer('verbose', 1, 'Verbosity of output from low (0) to high (1)')
 
-flags.DEFINE_float('learning_rate', 0.00001, 'Initial learning rate.')
-flags.DEFINE_integer('epochs', 1000, 'Number of max epochs to train.')
+flags.DEFINE_integer("model_seed", None, "Seed for model weights initialisation")
+flags.DEFINE_integer("data_seed", None, "Seed used for data train/val splitting")
+
+flags.DEFINE_float('learning_rate', 0.0002, 'Initial learning rate.')
+flags.DEFINE_integer('epochs', 100, 'Number of max epochs to train.')
 flags.DEFINE_integer('hidden1', 64, 'Number of units in hidden layer 1.')
 flags.DEFINE_integer('hidden2', 48, 'Number of units in hidden layer 2.')
 flags.DEFINE_float('weight_decay', 0., 'Weight for L2 loss on embedding matrix.')
@@ -51,9 +72,12 @@ flags.DEFINE_integer('random_prior', 0, 'When prior adjacency matrix should be s
 flags.DEFINE_integer('crossvalidation', 0, 'Whether to use crossvalidation (1) or not (0).')
 flags.DEFINE_integer('hp_optimization', 0, 'Whether to start the hyperparameter optimization run (1) or not (0).')
 
-wandb.init(config=FLAGS)
+print("features", FLAGS.features)
+wandb.init(project="GranPy", tags=["feature_test"], group="voltaire", config=FLAGS.flag_values_dict())
 
 config = wandb.config
+
+print(config)
 
 model_str = config.model
 model_timestamp = time.strftime("%Y%m%d_%H%M%S") + '_' + config.dataset + '_' + config.ground_truth
@@ -83,9 +107,15 @@ adj_orig = adj
 adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
 adj_orig.eliminate_zeros()
 
-adj_train, crossval_edges, test_edges, test_edges_false = gen_train_val_test_sets(adj_orig, config.crossvalidation,
+rng = np.random.RandomState(seed=DATA_SEED)  # this controls the split
+adj_train, crossval_edges, test_edges, test_edges_false = gen_train_val_test_sets(adj_orig,
+                                                                                  config.crossvalidation,
                                                                                   config.balanced_metrics,
-                                                                                  config.ratio_val, config.ratio_test)
+                                                                                  config.ratio_val,
+                                                                                  config.ratio_test,
+                                                                                  rng=rng
+                                                                                  )
+
 adj = adj_train
 
 if config.features == 0:
@@ -147,6 +177,7 @@ def build_tf_graph(model_str, features, adj):
 adj_pred = None
 
 placeholders, model, opt = build_tf_graph(model_str, features, adj)
+print(model)
 model_timestamp = model_timestamp + "_" + model_str + "_hid1-" + str(config.hidden1) + "_hid2-" + str(
     config.hidden2) + "_lr-" + str(config.learning_rate)
 _, _, _, adj_pred = train_test_model(adj_norm, adj_label, features, adj_orig, config, crossval_edges,
