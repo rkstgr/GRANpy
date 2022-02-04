@@ -32,6 +32,7 @@ def load_data(norm_expression_path, gold_standard_path, model_timestamp, random_
     adj = preprocess_input_adj(adj, sym=True, diag=0)
     adj, features, gene_names = crop_isolated_nodes(adj, features, gene_names)
     adj, features, gene_names = shuffle_nodes(adj, features, gene_names)
+    features = np.log(features+1)
     features = preprocessing.StandardScaler().fit_transform(features)
     # features= preprocessing.MinMaxScaler().fit_transform(features)
 

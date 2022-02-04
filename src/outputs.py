@@ -3,10 +3,8 @@ import pandas as pd
 from sklearn.metrics import roc_curve, precision_recall_curve, auc
 
 import matplotlib
-
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
 
 def viz_train_val_data(hist_scores, model_str, model_timestamp):
     # Plot training & validation metrics
@@ -97,7 +95,7 @@ def max_gmean_thresh(fpr, tpr, thresholds):
     gmeanOpt = np.round(gmean[index], 2)
     fprOpt = np.round(fpr[index], 2)
     tprOpt = np.round(tpr[index], 2)
-
+    
     return thresholds[index], gmeanOpt, fprOpt, tprOpt
 
 

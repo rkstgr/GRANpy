@@ -198,16 +198,19 @@ def get_scores(adj_rec, adj_orig, edges_pos, edges_neg, model_timestamp, viz_roc
     pos = []
     for e in edges_pos:
         preds.append(sigmoid(adj_rec[e[0], e[1]]))
-        pos.append(adj_orig[e[0], e[1]])
+        pos.append(1)
 
     preds_neg = []
     neg = []
     for e in edges_neg:
         preds_neg.append(sigmoid(adj_rec[e[0], e[1]]))
-        neg.append(adj_orig[e[0], e[1]])
+        neg.append(0)
 
-    preds_all = np.hstack([preds, preds_neg])
-    labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds_neg))])
+
+    #preds_all = np.hstack([preds, preds_neg])
+    preds_all = np.concatenate([preds, preds_neg])
+    #labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds_neg))])
+    labels_all = np.concatenate([np.ones(len(preds)), np.zeros(len(preds_neg))])
     roc_score = roc_auc_score(labels_all, preds_all)
     ap_score = average_precision_score(labels_all, preds_all)
     precision, recall, _ = precision_recall_curve(labels_all, preds_all)

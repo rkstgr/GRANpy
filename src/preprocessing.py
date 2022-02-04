@@ -144,6 +144,14 @@ def mask_test_edges(adj, ratio_val, ratio_test, balanced_metrics, rng):
     assert ~ismember(test_edges, train_edges)
     assert ~ismember(val_edges, test_edges)
 
+    ## Check split of edges:
+    #np.savetxt('logs/outputs/' + 'train_edges.csv', construct_adj(train_edges, adj.shape).toarray(), delimiter=";")
+    #np.savetxt('logs/outputs/' + 'train_edges_false.csv', construct_adj(train_edges_false, adj.shape).toarray(), delimiter=";")
+    #np.savetxt('logs/outputs/' + 'val_edges.csv', construct_adj(val_edges, adj.shape).toarray(), delimiter=";")
+    #np.savetxt('logs/outputs/' + 'val_edges_false.csv', construct_adj(val_edges_false, adj.shape).toarray(), delimiter=";")
+    #np.savetxt('logs/outputs/' + 'test_edges.csv', construct_adj(test_edges, adj.shape).toarray(), delimiter=";")
+    #np.savetxt('logs/outputs/' + 'test_edges_false.csv', construct_adj(test_edges_false, adj.shape).toarray(), delimiter=";")
+
     # NOTE: these edge lists only contain single direction of edge!
     return train_edges, train_edges_false, val_edges, val_edges_false, test_edges, test_edges_false
 
